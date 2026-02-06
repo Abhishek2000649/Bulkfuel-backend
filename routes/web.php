@@ -21,28 +21,28 @@ use App\Http\Controllers\Delivery\DeliveryDashboardController;
 |--------------------------------------------------------------------------
 */
 Route::middleware('guest')->group(function () {
-Route::get('/login', [AuthController::class, 'login'])->name('login');
-Route::get('/signup', [AuthController::class, 'signup']);
-Route::post('/login', [AuthController::class, 'doLogin']);
-Route::post('/register', [AuthController::class, 'register']);
+    Route::get('/login', [AuthController::class, 'login'])->name('login');
+    Route::get('/signup', [AuthController::class, 'signup']);
+    Route::post('/login', [AuthController::class, 'doLogin']);
+    Route::post('/register', [AuthController::class, 'register']);
 
 
 });
-Route::get('/logout', [AuthController::class, 'logout'])->name('logout');
+Route::post('/logout', [AuthController::class, 'logout'])->name('logout');
 /*
 |--------------------------------------------------------------------------
 | USER ROUTES (ROLE = USER)
 |--------------------------------------------------------------------------
 */
 Route::get('/', [UserController::class, 'home'])
-            ->name('user.dashboard');
+    ->name('user.dashboard');
 Route::middleware(['auth', 'user'])
     ->prefix('user')
     ->group(function () {
 
         // Route::get('/', [UserController::class, 'home'])
         //     ->name('user.dashboard');
-
+    
         Route::post('/order', [UserController::class, 'placeOrder'])
             ->name('user.order');
 
