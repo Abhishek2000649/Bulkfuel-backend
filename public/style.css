@@ -1,0 +1,12 @@
+body{font-family:Arial;background:#f4f4f4}
+header,footer{background:#000;color:#fff;padding:12px}
+.container{background:#fff;padding:20px;margin:20px}
+input,textarea{width:300px;padding:6px}
+button{background:green;color:white;padding:6px;border:none;cursor:pointer}
+a{color:white;margin-left:10px}
+button:disabled {
+    background-color: #ccc;   /* gray */
+    color: #666;
+    cursor: not-allowed;
+    border: 1px solid #aaa;
+}
