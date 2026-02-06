@@ -1,5 +1,14 @@
 <?php
 
+
+Route::get('/', function () {
+    return response()->json([
+        'status' => 'ok',
+        'message' => 'Backend running'
+    ]);
+});
+
+
 // use Illuminate\Support\Facades\Route;
 
 // use App\Http\Controllers\AuthController;
