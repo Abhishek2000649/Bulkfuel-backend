@@ -13,6 +13,11 @@ use App\Http\Controllers\Admin\CategoryController;
 use App\Http\Controllers\Admin\StockController;
 use App\Http\Controllers\Admin\WarehouseController;
 use App\Http\Controllers\Delivery\DeliveryDashboardController;
+
+Route::get('/test', function () {
+    return response()->json(['status' => 'API Working']);
+});
+
 Route::post('/login', [AuthController::class, 'doLogin']);
 Route::post('/register', [AuthController::class, 'register']);
 Route::middleware('auth:sanctum')->group(function () {
