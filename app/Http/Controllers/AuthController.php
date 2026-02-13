@@ -218,21 +218,110 @@ class AuthController extends Controller
 
 
     // logout
-   public function logout(Request $request)
+  public function logout(Request $request)
 {
-    $request->user()->currentAccessToken()->delete();
+    try {
 
-    return response()->json([
-        'status'  => true,
-        'message' => 'Logged out successfully'
-    ]);
+        /* =====================================================
+         * 1️⃣ 401 – Unauthorized (Token Missing / Invalid)
+         * ===================================================== */
+        if (!$request->user()) {
+            return response()->json([
+                'success' => false,
+                'code'    => 401,
+                'message' => 'Unauthorized. Please login first.'
+            ], 401);
+        }
+
+        /* =====================================================
+         * 2️⃣ 403 – Forbidden (Optional: If account inactive)
+         * ===================================================== */
+        if ($request->user()->status === 'inactive') {
+            return response()->json([
+                'success' => false,
+                'code'    => 403,
+                'message' => 'Account is inactive. Logout not allowed.'
+            ], 403);
+        }
+
+        /* =====================================================
+         * 3️⃣ 200 – Logout Success
+         * ===================================================== */
+        $request->user()->currentAccessToken()->delete();
+
+        return response()->json([
+            'success' => true,
+            'code'    => 200,
+            'message' => 'Logged out successfully'
+        ], 200);
+
+    } catch (\Throwable $e) {
+
+        /* =====================================================
+         * 4️⃣ 500 – Internal Server Error
+         * ===================================================== */
+        return response()->json([
+            'success' => false,
+            'code'    => 500,
+            'message' => 'Internal server error',
+            'error'   => config('app.debug') ? $e->getMessage() : null
+        ], 500);
+    }
 }
+
 public function me(Request $request)
 {
-     return response()->json([
-        'user' => $request->user()->load('address')
-    ]);
+    try {
+
+        /* =====================================================
+         * 1️⃣ 401 – Unauthorized (Token Missing / Invalid)
+         * ===================================================== */
+        if (!$request->user()) {
+            return response()->json([
+                'success' => false,
+                'code'    => 401,
+                'message' => 'Unauthorized. Please login first.'
+            ], 401);
+        }
+
+        /* =====================================================
+         * 2️⃣ 404 – User Not Found (Rare but safe check)
+         * ===================================================== */
+        $user = User::with('address')
+                    ->find($request->user()->id);
+
+        if (!$user) {
+            return response()->json([
+                'success' => false,
+                'code'    => 404,
+                'message' => 'User not found'
+            ], 404);
+        }
+
+        /* =====================================================
+         * 3️⃣ 200 – Success
+         * ===================================================== */
+        return response()->json([
+            'success' => true,
+            'code'    => 200,
+            'message' => 'User profile fetched successfully',
+            'data'    => $user
+        ], 200);
+
+    } catch (\Throwable $e) {
+
+        /* =====================================================
+         * 4️⃣ 500 – Internal Server Error
+         * ===================================================== */
+        return response()->json([
+            'success' => false,
+            'code'    => 500,
+            'message' => 'Internal server error',
+            'error'   => config('app.debug') ? $e->getMessage() : null
+        ], 500);
+    }
 }
+
 
 
 }
