@@ -271,47 +271,10 @@ class AuthController extends Controller
 
 public function me(Request $request)
 {
-    try {
-
-        /* =====================================================
-         * 1️⃣ 401 – Unauthorized
-         * ===================================================== */
-        if (!$request->user()) {
-            return response()->json([
-                'message' => 'Unauthenticated.'
-            ], 401);
-        }
-
-        /* =====================================================
-         * 2️⃣ Load User with Address
-         * ===================================================== */
-        $user = $request->user()->load('address');
-
-        if (!$user) {
-            return response()->json([
-                'message' => 'User not found.'
-            ], 404);
-        }
-
-        /* =====================================================
-         * 3️⃣ 200 – Success (Same as Old Structure)
-         * ===================================================== */
-        return response()->json([
-            'user' => $user
-        ], 200);
-
-    } catch (\Throwable $e) {
-
-        /* =====================================================
-         * 4️⃣ 500 – Internal Server Error
-         * ===================================================== */
-        return response()->json([
-            'message' => 'Internal server error'
-        ], 500);
-    }
+     return response()->json([
+        'user' => $request->user()->load('address')
+    ]);
 }
-
-
 
 
 }
