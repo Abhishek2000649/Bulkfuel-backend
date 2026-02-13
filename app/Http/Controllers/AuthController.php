@@ -274,38 +274,30 @@ public function me(Request $request)
     try {
 
         /* =====================================================
-         * 1️⃣ 401 – Unauthorized (Token Missing / Invalid)
+         * 1️⃣ 401 – Unauthorized
          * ===================================================== */
         if (!$request->user()) {
             return response()->json([
-                'success' => false,
-                'code'    => 401,
-                'message' => 'Unauthorized. Please login first.'
+                'message' => 'Unauthenticated.'
             ], 401);
         }
 
         /* =====================================================
-         * 2️⃣ 404 – User Not Found (Rare but safe check)
+         * 2️⃣ Load User with Address
          * ===================================================== */
-        $user = User::with('address')
-                    ->find($request->user()->id);
+        $user = $request->user()->load('address');
 
         if (!$user) {
             return response()->json([
-                'success' => false,
-                'code'    => 404,
-                'message' => 'User not found'
+                'message' => 'User not found.'
             ], 404);
         }
 
         /* =====================================================
-         * 3️⃣ 200 – Success
+         * 3️⃣ 200 – Success (Same as Old Structure)
          * ===================================================== */
         return response()->json([
-            'success' => true,
-            'code'    => 200,
-            'message' => 'User profile fetched successfully',
-            'data'    => $user
+            'user' => $user
         ], 200);
 
     } catch (\Throwable $e) {
@@ -314,13 +306,11 @@ public function me(Request $request)
          * 4️⃣ 500 – Internal Server Error
          * ===================================================== */
         return response()->json([
-            'success' => false,
-            'code'    => 500,
-            'message' => 'Internal server error',
-            'error'   => config('app.debug') ? $e->getMessage() : null
+            'message' => 'Internal server error'
         ], 500);
     }
 }
+
 
 
 
