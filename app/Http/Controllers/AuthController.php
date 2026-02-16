@@ -23,27 +23,6 @@ class AuthController extends Controller
         return view('auth.signup');
     }
 
-    // register user
-    // public function register(Request $request)
-    // {
-    //     $request->validate([
-    //         'name'     => 'required|min:3',
-    //         'email'    => 'required|email|unique:users',
-    //         'password' => 'required|min:6'
-    //     ]);
-
-    //     User::create([
-    //         'name'     => $request->name,
-    //         'email'    => $request->email,
-    //         'password' => bcrypt($request->password),
-    //         'role'     => 'USER'
-    //     ]);
-
-    //     return response()->json([
-    //         'status'=> true,
-    //     ]);
-    // }
-
     public function register(Request $request)
 {
     try {
