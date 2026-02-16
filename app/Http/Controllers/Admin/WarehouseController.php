@@ -206,7 +206,7 @@ class WarehouseController extends Controller
     /* =========================
        DELETE WAREHOUSE
        ========================= */
-    public function destroy($id)
+    public function delete($id)
     {
         try {
 
