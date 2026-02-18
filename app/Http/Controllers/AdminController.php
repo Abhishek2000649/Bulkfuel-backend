@@ -92,7 +92,9 @@ class AdminController extends Controller
             'category_id' => $request->category_id,
         ]);
 
-        return response()->json(['status' => true]);
+        return response()->json([
+            'status' => true
+        ]);
     }
 
     // Edit product page
