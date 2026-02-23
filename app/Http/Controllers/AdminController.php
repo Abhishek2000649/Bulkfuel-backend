@@ -1,10 +1,9 @@
 <?php
-
 namespace App\Http\Controllers;
-
 use Illuminate\Http\Request;
 use App\Models\Product;
 use App\Models\Category;
+use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\Validator;
 
 class AdminController extends Controller
@@ -26,7 +25,7 @@ class AdminController extends Controller
     {
         try {
 
-            if (!auth()->check()) {
+            if (!Auth::guard('sanctum')->check()) {
                 return response()->json([
                     'success' => false,
                     'status_code' => 401,
@@ -102,7 +101,7 @@ class AdminController extends Controller
     {
         try {
 
-            if (!auth()->check()) {
+            if (!Auth::guard('sanctum')->check()) {
                 return response()->json([
                     'success' => false,
                     'status_code' => 401,
@@ -168,7 +167,7 @@ class AdminController extends Controller
     {
         try {
 
-            if (!auth()->check()) {
+            if (!Auth::guard('sanctum')->check()) {
                 return response()->json([
                     'success' => false,
                     'status_code' => 401,
@@ -254,7 +253,7 @@ class AdminController extends Controller
     {
         try {
 
-            if (!auth()->check()) {
+            if (!Auth::guard('sanctum')->check()) {
                 return response()->json([
                     'success' => false,
                     'status_code' => 401,
