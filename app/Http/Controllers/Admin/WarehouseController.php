@@ -5,18 +5,16 @@ namespace App\Http\Controllers\Admin;
 use App\Http\Controllers\Controller;
 use App\Models\Warehouse;
 use Illuminate\Http\Request;
+use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\Validator;
-
 class WarehouseController extends Controller
 {
-    /* =========================
-       GET ALL WAREHOUSES
-       ========================= */
+    
     public function index()
     {
         try {
 
-            if (!auth()->check()) {
+            if (!Auth::guard('sanctum')->check()) {
                 return response()->json([
                     'success' => false,
                     'message' => 'Unauthorized. Please login first.'
@@ -48,14 +46,12 @@ class WarehouseController extends Controller
     }
 
 
-    /* =========================
-       SHOW SINGLE WAREHOUSE
-       ========================= */
+    
     public function edit($id)
     {
         try {
 
-            if (!auth()->check()) {
+            if (!Auth::guard('sanctum')->check()) {
                 return response()->json([
                     'success' => false,
                     'message' => 'Unauthorized. Please login first.'
@@ -93,7 +89,7 @@ class WarehouseController extends Controller
     {
         try {
 
-            if (!auth()->check()) {
+            if (!Auth::guard('sanctum')->check()) {
                 return response()->json([
                     'success' => false,
                     'message' => 'Unauthorized. Please login first.'
@@ -147,7 +143,7 @@ class WarehouseController extends Controller
     {
         try {
 
-            if (!auth()->check()) {
+            if (!Auth::guard('sanctum')->check()) {
                 return response()->json([
                     'success' => false,
                     'message' => 'Unauthorized. Please login first.'
@@ -210,7 +206,7 @@ class WarehouseController extends Controller
     {
         try {
 
-            if (!auth()->check()) {
+            if (!Auth::guard('sanctum')->check()) {
                 return response()->json([
                     'success' => false,
                     'message' => 'Unauthorized. Please login first.'
