@@ -8,117 +8,20 @@ use App\Models\Product;
 use App\Models\Order;
 use App\Models\Payment;
 use App\Models\Address;
-
-use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\Hash;
 use Illuminate\Validation\ValidationException;
 use Laravel\Sanctum\PersonalAccessToken;
+use Illuminate\Support\Facades\Auth;
+use Illuminate\Database\Eloquent\ModelNotFoundException;
+use Illuminate\Auth\AuthenticationException;
+use Illuminate\Database\QueryException;
+use Exception;
+
+
 
 class UserController extends Controller
 {
     
-//    public function home()
-// {
-//     $products = Product::with('warehouseProducts')->get();
-
-//     $cartItems = [];
-
-//     if (Auth::check()) {
-//         $cartItems = Cart::where('user_id', Auth::id())
-//                          ->pluck('quantity','product_id')
-//                          ->toArray();
-//     }
-
-//     return view('user.home', compact('products','cartItems'));
-// }
-
-
-    
-//     public function placeOrder(Request $request)
-//     {
-        
-//         $request->validate([
-//             'product_id' => 'required|exists:products,id',
-//             'quantity'   => 'required|numeric|min:1'
-//         ]);
-
-        
-//         $product = Product::find($request->product_id);
-
-        
-//         if ($request->quantity > $product->stock) {
-//             return back()->with('error', 'Not enough stock available');
-//         }
-
-        
-//         $order = Order::create([
-//             'user_id'      => auth()->id(),
-//             'product_id'   => $product->id,
-//             'quantity'     => $request->quantity,
-//             'total_amount' => $product->price * $request->quantity,
-//             'status'       => 'PENDING'
-//         ]);
-
-        
-//         $product->decrement('stock', $request->quantity);
-
-        
-//         Payment::create([
-//             'order_id' => $order->id,
-//             'method'   => 'COD',
-//             'status'   => 'SUCCESS'
-//         ]);
-
-//         return redirect('user/my-orders')->with('success', 'Order placed successfully');
-//     }
-
-//    public function orders()
-// {
-//     $orders = Order::where('user_id', auth()->id())
-//         ->with([
-//             'items.product',   // order items + product
-//             'delivery'         // ✅ delivery details
-//         ])
-//         ->latest()
-//         ->get();
-
-//     return view('user.orders', compact('orders'));
-// }
-
-
-    
-//     public function profile()
-//     {
-//         return view('user.profile');
-//     }
-
-    
-//     public function saveProfile(Request $request)
-//     {
-//         $request->validate([
-//             'address' => 'required',
-//             'city'    => 'required',
-//             'state'   => 'required',
-//             'pincode' => 'required'
-//         ]);
-
-//         Address::updateOrCreate(
-//             ['user_id' => auth()->id()],
-//             [
-//                 'address' => $request->address,
-//                 'city'    => $request->city,
-//                 'state'   => $request->state,
-//                 'pincode' => $request->pincode
-//             ]
-//         );
-
-//         return back()->with('success', 'Profile updated successfully');
-//     }
-
-
-
-
-
  public function home(Request $request)
     {
         $products = Product::with(['warehouseProducts', 'category'])->get();
@@ -135,12 +38,6 @@ class UserController extends Controller
         }
     }
 
-        // if (Auth::check()) {
-        //     $cartItems = Cart::where('user_id', Auth::id())
-        //         ->pluck('quantity', 'product_id')
-        //         ->toArray();
-        // }
-
         return response()->json([
             'status' => true,
             'products' => $products,
@@ -148,9 +45,7 @@ class UserController extends Controller
         ]);
     }
 
-    /* =========================
-       PLACE ORDER (FROM CART)
-       ========================= */
+    
     public function placeOrder(Request $request)
     {
         $request->validate([
@@ -203,9 +98,7 @@ class UserController extends Controller
         ]);
     }
 
-    /* =========================
-       USER ORDERS
-       ========================= */
+    
     public function orders()
     {
         $orders = Order::where('user_id', Auth::id())
@@ -222,152 +115,300 @@ class UserController extends Controller
         ]);
     }
 
-    /* =========================
-       USER PROFILE
-       ========================= */
-    public function profile()
-    {
+    
+  public function profile()
+{
+    try {
+
+        
+        if (!Auth::check()) {
+            return response()->json([
+                'status' => false,
+                'message' => 'Unauthorized. Please login first.'
+            ], 401);
+        }
+
+        
+        $user = Auth::user();
+
+        if (!$user) {
+            return response()->json([
+                'status' => false,
+                'message' => 'User not found.'
+            ], 404);
+        }
+
+        
+        $user->load('address');
+
         return response()->json([
             'status' => true,
-            'user' => Auth::user()->load('address'),
-        ]);
+            'message' => 'Profile fetched successfully.',
+            'user' => $user
+        ], 200);
+
+    } catch (AuthenticationException $e) {
+
+        return response()->json([
+            'status' => false,
+            'message' => 'Authentication failed.',
+            'error' => $e->getMessage()
+        ], 401);
+
+    } catch (ModelNotFoundException $e) {
+
+        return response()->json([
+            'status' => false,
+            'message' => 'User not found.',
+            'error' => $e->getMessage()
+        ], 404);
+
+    } catch (QueryException $e) {
+
+        return response()->json([
+            'status' => false,
+            'message' => 'Database error occurred.',
+            'error' => $e->getMessage()
+        ], 500);
+
+    } catch (Exception $e) {
+
+        return response()->json([
+            'status' => false,
+            'message' => 'Something went wrong.',
+            'error' => $e->getMessage()
+        ], 500);
     }
-//   public function saveProfile(Request $request)
-// {
-//     $user = Auth::user();
-
-//     /* ============================
-//        VALIDATION
-//     ============================ */
-//     $request->validate([
-//         'name'    => 'required|string|max:255',
-//         'email'   => 'required|email|unique:users,email,' . $user->id,
-
-//         'address' => 'required|string',
-//         'city'    => 'required|string',
-//         'state'   => 'required|string',
-//         'pincode' => 'required|string',
-
-//         // password fields (optional)
-//         'current_password' => 'nullable|required_with:password',
-//         'password' => 'nullable|min:6|confirmed',
-//     ]);
-
-//     /* ============================
-//        UPDATE USER (NAME, EMAIL)
-//     ============================ */
-//     $user->update([
-//         'name'  => $request->name,
-//         'email' => $request->email,
-//     ]);
-
-//     /* ============================
-//        UPDATE PASSWORD (OPTIONAL)
-//     ============================ */
-//     if ($request->filled('password')) {
-
-//         if (!Hash::check($request->current_password, $user->password)) {
-//             throw ValidationException::withMessages([
-//                 'current_password' => ['Current password is incorrect'],
-//             ]);
-//         }
-
-//         $user->update([
-//             'password' => Hash::make($request->password),
-//         ]);
-//     }
-
-//     /* ============================
-//        UPDATE ADDRESS
-//     ============================ */
-//     $address = Address::updateOrCreate(
-//         ['user_id' => $user->id],
-//         [
-//             'address' => $request->address,
-//             'city'    => $request->city,
-//             'state'   => $request->state,
-//             'pincode' => $request->pincode,
-//         ]
-//     );
-
-//     return response()->json([
-//         'status'  => true,
-//         'message' => 'Profile updated successfully',
-//         'user'    => $user->load('address'),
-//     ]);
-// }
+}
 
 public function updateBasic(Request $request)
 {
-    $user = Auth::user();
+    try {
 
-    $request->validate([
-        'name'  => 'required|string|max:255',
-        'email' => 'required|email|unique:users,email,' . $user->id,
-    ]);
+        // 1️⃣ Check Authentication (Sanctum)
+        if (!Auth::guard('sanctum')->check()) {
+            return response()->json([
+                'status'  => false,
+                'message' => 'Unauthorized. Please login first.'
+            ], 401);
+        }
 
-    $user->update([
-        'name'  => $request->name,
-        'email' => $request->email,
-    ]);
+        $user = Auth::user();
 
-    return response()->json([
-        'status'  => true,
-        'message' => 'Name & email updated successfully',
-        'user'    => $user,
-    ]);
+        if (!$user) {
+            return response()->json([
+                'status'  => false,
+                'message' => 'User not found.'
+            ], 404);
+        }
+
+        // 2️⃣ Validation
+        $validated = $request->validate([
+            'name'  => 'required|string|max:255',
+            'email' => 'required|email|unique:users,email,' . $user->id,
+        ]);
+
+        // 3️⃣ Update
+        $user->update($validated);
+
+        return response()->json([
+            'status'  => true,
+            'message' => 'Name & email updated successfully.',
+            'data'    => $user
+        ], 200);
+
+    } catch (ValidationException $e) {
+
+        return response()->json([
+            'status'  => false,
+            'message' => 'Validation failed.',
+            'errors'  => $e->errors()
+        ], 422);
+
+    } catch (AuthenticationException $e) {
+
+        return response()->json([
+            'status'  => false,
+            'message' => 'Authentication failed.'
+        ], 401);
+
+    } catch (ModelNotFoundException $e) {
+
+        return response()->json([
+            'status'  => false,
+            'message' => 'User not found.'
+        ], 404);
+
+    } catch (QueryException $e) {
+
+        return response()->json([
+            'status'  => false,
+            'message' => 'Database error occurred.'
+        ], 500);
+
+    } catch (Exception $e) {
+
+        return response()->json([
+            'status'  => false,
+            'message' => 'Something went wrong.'
+        ], 500);
+    }
 }
 public function updateAddress(Request $request)
 {
-    $user = Auth::user();
+    try {
 
-    $request->validate([
-        'address' => 'required|string',
-        'city'    => 'required|string',
-        'state'   => 'required|string',
-        'pincode' => 'required|string',
-    ]);
+        // 1️⃣ Check Sanctum Authentication
+        if (!Auth::guard('sanctum')->check()) {
+            return response()->json([
+                'status'  => false,
+                'message' => 'Unauthorized. Please login first.'
+            ], 401);
+        }
 
-    $address = Address::updateOrCreate(
-        ['user_id' => $user->id],
-        [
-            'address' => $request->address,
-            'city'    => $request->city,
-            'state'   => $request->state,
-            'pincode' => $request->pincode,
-        ]
-    );
+        $user = Auth::user();
 
-    return response()->json([
-        'status'  => true,
-        'message' => 'Address updated successfully',
-        'address' => $address,
-    ]);
+        if (!$user) {
+            return response()->json([
+                'status'  => false,
+                'message' => 'User not found.'
+            ], 404);
+        }
+
+        // 2️⃣ Validate Request
+        $validated = $request->validate([
+            'address' => 'required|string',
+            'city'    => 'required|string',
+            'state'   => 'required|string',
+            'pincode' => 'required|string',
+        ]);
+
+        // 3️⃣ Create or Update Address
+        $address = Address::updateOrCreate(
+            ['user_id' => $user->id],
+            $validated
+        );
+
+        return response()->json([
+            'status'  => true,
+            'message' => 'Address updated successfully.',
+            'data'    => $address,
+        ], 200);
+
+    } catch (ValidationException $e) {
+
+        return response()->json([
+            'status'  => false,
+            'message' => 'Validation failed.',
+            'errors'  => $e->errors()
+        ], 422);
+
+    } catch (AuthenticationException $e) {
+
+        return response()->json([
+            'status'  => false,
+            'message' => 'Authentication failed.'
+        ], 401);
+
+    } catch (ModelNotFoundException $e) {
+
+        return response()->json([
+            'status'  => false,
+            'message' => 'User not found.'
+        ], 404);
+
+    } catch (QueryException $e) {
+
+        return response()->json([
+            'status'  => false,
+            'message' => 'Database error occurred.'
+        ], 500);
+
+    } catch (Exception $e) {
+
+        return response()->json([
+            'status'  => false,
+            'message' => 'Something went wrong.'
+        ], 500);
+    }
 }
 public function updatePassword(Request $request)
 {
-    $user = Auth::user();
+    try {
 
-    $request->validate([
-        'current_password' => 'required',
-        'password' => 'required|min:6|confirmed',
-    ]);
+        // 1️⃣ Check Authentication (Sanctum)
+        if (!Auth::guard('sanctum')->check()) {
+            return response()->json([
+                'status'  => false,
+                'message' => 'Unauthorized. Please login first.'
+            ], 401);
+        }
 
-    // 🔐 check old password
-    if (!Hash::check($request->current_password, $user->password)) {
-        throw ValidationException::withMessages([
-            'current_password' => ['Current password is incorrect'],
+        $user = Auth::user();
+
+        if (!$user) {
+            return response()->json([
+                'status'  => false,
+                'message' => 'User not found.'
+            ], 404);
+        }
+
+        // 2️⃣ Validate Request
+        $validated = $request->validate([
+            'current_password' => 'required',
+            'password'         => 'required|min:6|confirmed',
         ]);
+
+        // 3️⃣ Check Old Password
+        if (!Hash::check($validated['current_password'], $user->password)) {
+            return response()->json([
+                'status'  => false,
+                'message' => 'Current password is incorrect.',
+                'errors'  => [
+                    'current_password' => ['Current password is incorrect.']
+                ]
+            ], 422);
+        }
+
+        // 4️⃣ Update Password
+        $user->update([
+            'password' => Hash::make($validated['password']),
+        ]);
+
+        return response()->json([
+            'status'  => true,
+            'message' => 'Password updated successfully.'
+        ], 200);
+
+    } catch (ValidationException $e) {
+
+        return response()->json([
+            'status'  => false,
+            'message' => 'Validation failed.',
+            'errors'  => $e->errors()
+        ], 422);
+
+    } catch (AuthenticationException $e) {
+
+        return response()->json([
+            'status'  => false,
+            'message' => 'Authentication failed.'
+        ], 401);
+
+    } catch (QueryException $e) {
+
+        return response()->json([
+            'status'  => false,
+            'message' => 'Database error occurred.'
+        ], 500);
+
+    } catch (Exception $e) {
+
+        return response()->json([
+            'status'  => false,
+            'message' => 'Something went wrong.'
+        ], 500);
     }
-
-    $user->update([
-        'password' => Hash::make($request->password),
-    ]);
-
-    return response()->json([
-        'status'  => true,
-        'message' => 'Password updated successfully',
-    ]);
 }
 
 }
