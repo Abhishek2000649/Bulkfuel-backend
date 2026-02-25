@@ -23,32 +23,89 @@ class UserController extends Controller
 {
     
  public function home(Request $request)
-    {
+{
+    try {
+
+        // 1️⃣ Get Products
         $products = Product::with(['warehouseProducts', 'category'])->get();
 
         $cartItems = [];
 
-          if ($request->bearerToken()) {
-        $token = PersonalAccessToken::findToken($request->bearerToken());
+        // 2️⃣ If Bearer Token Exists (Optional Login)
+        if ($request->bearerToken()) {
 
-        if ($token) {
+            $token = PersonalAccessToken::findToken($request->bearerToken());
+
+            if (!$token) {
+                return response()->json([
+                    'status'  => false,
+                    'message' => 'Invalid or expired token.'
+                ], 401);
+            }
+
             $user = $token->tokenable;
+
+            if (!$user) {
+                return response()->json([
+                    'status'  => false,
+                    'message' => 'User not found.'
+                ], 404);
+            }
+
             $cartItems = Cart::where('user_id', $user->id)
                 ->pluck('quantity', 'product_id');
         }
-    }
 
         return response()->json([
-            'status' => true,
-            'products' => $products,
+            'status'    => true,
+            'products'  => $products,
             'cartItems' => $cartItems,
-        ]);
-    }
+        ], 200);
 
+    } catch (QueryException $e) {
+
+        return response()->json([
+            'status'  => false,
+            'message' => 'Database error occurred.'
+        ], 500);
+
+    } catch (AuthenticationException $e) {
+
+        return response()->json([
+            'status'  => false,
+            'message' => 'Authentication failed.'
+        ], 401);
+
+    } catch (ModelNotFoundException $e) {
+
+        return response()->json([
+            'status'  => false,
+            'message' => 'Data not found.'
+        ], 404);
+
+    } catch (Exception $e) {
+
+        return response()->json([
+            'status'  => false,
+            'message' => 'Something went wrong.'
+        ], 500);
+    }
+}
     
     public function placeOrder(Request $request)
-    {
-        $request->validate([
+{
+    try {
+
+        // 1️⃣ Authentication Check (Sanctum protected route)
+        if (!Auth::check()) {
+            return response()->json([
+                'status'  => false,
+                'message' => 'Unauthorized. Please login first.'
+            ], 401);
+        }
+
+        // 2️⃣ Validation
+        $validated = $request->validate([
             'items' => 'required|array',
             'items.*.product_id' => 'required|exists:products,id',
             'items.*.quantity' => 'required|numeric|min:1',
@@ -56,12 +113,21 @@ class UserController extends Controller
 
         $totalAmount = 0;
 
-        foreach ($request->items as $item) {
+        // 3️⃣ Stock Checking
+        foreach ($validated['items'] as $item) {
+
             $product = Product::find($item['product_id']);
+
+            if (!$product) {
+                return response()->json([
+                    'status'  => false,
+                    'message' => 'Product not found.'
+                ], 404);
+            }
 
             if ($item['quantity'] > $product->totalStock()) {
                 return response()->json([
-                    'status' => false,
+                    'status'  => false,
                     'message' => 'Not enough stock for ' . $product->name,
                 ], 400);
             }
@@ -69,38 +135,89 @@ class UserController extends Controller
             $totalAmount += $product->price * $item['quantity'];
         }
 
+        // 4️⃣ Create Order
         $order = Order::create([
             'user_id' => Auth::id(),
             'total_amount' => $totalAmount,
             'status' => 'PENDING',
         ]);
 
-        foreach ($request->items as $item) {
+        // 5️⃣ Create Order Items
+        foreach ($validated['items'] as $item) {
             $order->items()->create([
                 'product_id' => $item['product_id'],
-                'quantity' => $item['quantity'],
-                'price' => Product::find($item['product_id'])->price,
+                'quantity'   => $item['quantity'],
+                'price'      => Product::find($item['product_id'])->price,
             ]);
         }
 
+        // 6️⃣ Create Payment
         Payment::create([
             'order_id' => $order->id,
-            'method' => 'COD',
-            'status' => 'SUCCESS',
+            'method'   => 'COD',
+            'status'   => 'SUCCESS',
         ]);
 
+        // 7️⃣ Clear Cart
         Cart::where('user_id', Auth::id())->delete();
 
         return response()->json([
-            'status' => true,
-            'message' => 'Order placed successfully',
+            'status'   => true,
+            'message'  => 'Order placed successfully',
             'order_id' => $order->id,
-        ]);
-    }
+        ], 200);
 
+    } catch (ValidationException $e) {
+
+        return response()->json([
+            'status'  => false,
+            'message' => 'Validation failed.',
+            'errors'  => $e->errors()
+        ], 422);
+
+    } catch (AuthenticationException $e) {
+
+        return response()->json([
+            'status'  => false,
+            'message' => 'Authentication failed.'
+        ], 401);
+
+    } catch (ModelNotFoundException $e) {
+
+        return response()->json([
+            'status'  => false,
+            'message' => 'Resource not found.'
+        ], 404);
+
+    } catch (QueryException $e) {
+
+        return response()->json([
+            'status'  => false,
+            'message' => 'Database error occurred.'
+        ], 500);
+
+    } catch (Exception $e) {
+
+        return response()->json([
+            'status'  => false,
+            'message' => 'Something went wrong.'
+        ], 500);
+    }
+}
     
-    public function orders()
-    {
+   public function orders()
+{
+    try {
+
+        // 1️⃣ Check Authentication (Sanctum Protected Route)
+        if (!Auth::check()) {
+            return response()->json([
+                'status'  => false,
+                'message' => 'Unauthorized. Please login first.'
+            ], 401);
+        }
+
+        // 2️⃣ Get Orders (Same Logic)
         $orders = Order::where('user_id', Auth::id())
             ->with([
                 'items.product',
@@ -112,8 +229,37 @@ class UserController extends Controller
         return response()->json([
             'status' => true,
             'orders' => $orders,
-        ]);
+        ], 200);
+
+    } catch (AuthenticationException $e) {
+
+        return response()->json([
+            'status'  => false,
+            'message' => 'Authentication failed.'
+        ], 401);
+
+    } catch (ModelNotFoundException $e) {
+
+        return response()->json([
+            'status'  => false,
+            'message' => 'Orders not found.'
+        ], 404);
+
+    } catch (QueryException $e) {
+
+        return response()->json([
+            'status'  => false,
+            'message' => 'Database error occurred.'
+        ], 500);
+
+    } catch (Exception $e) {
+
+        return response()->json([
+            'status'  => false,
+            'message' => 'Something went wrong.'
+        ], 500);
     }
+}
 
     
   public function profile()
