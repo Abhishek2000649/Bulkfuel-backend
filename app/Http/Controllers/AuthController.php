@@ -3,31 +3,20 @@
 namespace App\Http\Controllers;
 
 use Exception;
-use Hash;
+use Illuminate\Support\Facades\Hash;
 use Illuminate\Http\Request;
 use App\Models\User;
-use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\Validator;
+
 
 class AuthController extends Controller
 {
-    // show login page
-    public function login()
-    {
-        return view('auth.login');
-    }
-
-    // show signup page
-    public function signup()
-    {
-        return view('auth.signup');
-    }
 
     public function register(Request $request)
 {
     try {
 
-        // ✅ Check empty request
+        
         if (!$request->all()) {
             return response()->json([
                 'status' => false,
@@ -36,14 +25,14 @@ class AuthController extends Controller
             ], 400);
         }
 
-        // ✅ Manual Validation
+        
         $validator = Validator::make($request->all(), [
             'name'     => 'required|min:3',
             'email'    => 'required|email',
             'password' => 'required|min:6'
         ]);
 
-        // ❌ Validation Error (422)
+        
         if ($validator->fails()) {
             return response()->json([
                 'status'  => false,
@@ -53,7 +42,7 @@ class AuthController extends Controller
             ], 422);
         }
 
-        // ❌ Email Already Exists (409)
+       
         if (User::where('email', $request->email)->exists()) {
             return response()->json([
                 'status'  => false,
@@ -62,7 +51,7 @@ class AuthController extends Controller
             ], 409);
         }
 
-        // ✅ Create User
+       
         $user = User::create([
             'name'     => $request->name,
             'email'    => $request->email,
@@ -70,7 +59,7 @@ class AuthController extends Controller
             'role'     => 'USER'
         ]);
 
-        // ✅ Success (201 Created)
+       
         return response()->json([
             'status'  => true,
             'code'    => 201,
@@ -80,7 +69,7 @@ class AuthController extends Controller
 
     } catch (Exception $e) {
 
-        // 💥 Server Error (500)
+       
         return response()->json([
             'status'  => false,
             'code'    => 500,
@@ -90,15 +79,13 @@ class AuthController extends Controller
     }
 }
 
-    // login user
+  
   public function doLogin(Request $request)
 {
     try {
 
-        /* =====================================================
-         * 1️⃣ 422 – Validation Error
-         * ===================================================== */
-        $validator = \Validator::make($request->all(), [
+       
+        $validator = Validator::make($request->all(), [
             'email'    => 'required|email',
             'password' => 'required',
         ]);
@@ -112,10 +99,7 @@ class AuthController extends Controller
             ], 422);
         }
 
-        /* =====================================================
-         * 2️⃣ 404 – User Not Found (OPTIONAL)
-         * (Many apps still return 401 for security)
-         * ===================================================== */
+        
         $user = User::where('email', $request->email)->first();
 
         if (!$user) {
@@ -126,10 +110,8 @@ class AuthController extends Controller
             ], 404);
         }
 
-        /* =====================================================
-         * 3️⃣ 401 – Invalid Credentials
-         * ===================================================== */
-        if (!\Hash::check($request->password, $user->password)) {
+        
+        if (!Hash::check($request->password, $user->password)) {
             return response()->json([
                 'success' => false,
                 'code'    => 401,
@@ -137,9 +119,7 @@ class AuthController extends Controller
             ], 401);
         }
 
-        /* =====================================================
-         * 4️⃣ 403 – Account Inactive / Blocked
-         * ===================================================== */
+       
         if ($user->status === 'inactive') {
             return response()->json([
                 'success' => false,
@@ -148,10 +128,7 @@ class AuthController extends Controller
             ], 403);
         }
 
-        /* =====================================================
-         * 5️⃣ 429 – Too Many Requests (Manual example)
-         * (Normally handled by throttle middleware)
-         * ===================================================== */
+      
         if ($user->login_attempts >= 5) {
             return response()->json([
                 'success' => false,
@@ -160,9 +137,7 @@ class AuthController extends Controller
             ], 429);
         }
 
-        /* =====================================================
-         * 6️⃣ 200 – Login Success
-         * ===================================================== */
+       
         $token = $user->createToken('angular-token')->plainTextToken;
 
         return response()->json([
@@ -181,10 +156,6 @@ class AuthController extends Controller
         ], 200);
 
     } catch (\Throwable $e) {
-
-        /* =====================================================
-         * 7️⃣ 500 – Internal Server Error
-         * ===================================================== */
         return response()->json([
             'success' => false,
             'code'    => 500,
@@ -196,14 +167,12 @@ class AuthController extends Controller
 
 
 
-    // logout
+    
   public function logout(Request $request)
 {
     try {
 
-        /* =====================================================
-         * 1️⃣ 401 – Unauthorized (Token Missing / Invalid)
-         * ===================================================== */
+      
         if (!$request->user()) {
             return response()->json([
                 'success' => false,
@@ -212,9 +181,7 @@ class AuthController extends Controller
             ], 401);
         }
 
-        /* =====================================================
-         * 2️⃣ 403 – Forbidden (Optional: If account inactive)
-         * ===================================================== */
+        
         if ($request->user()->status === 'inactive') {
             return response()->json([
                 'success' => false,
@@ -223,9 +190,7 @@ class AuthController extends Controller
             ], 403);
         }
 
-        /* =====================================================
-         * 3️⃣ 200 – Logout Success
-         * ===================================================== */
+        
         $request->user()->currentAccessToken()->delete();
 
         return response()->json([
@@ -236,9 +201,7 @@ class AuthController extends Controller
 
     } catch (\Throwable $e) {
 
-        /* =====================================================
-         * 4️⃣ 500 – Internal Server Error
-         * ===================================================== */
+        
         return response()->json([
             'success' => false,
             'code'    => 500,
