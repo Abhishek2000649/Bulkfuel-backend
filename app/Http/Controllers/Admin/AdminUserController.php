@@ -5,6 +5,7 @@ namespace App\Http\Controllers\Admin;
 use App\Http\Controllers\Controller;
 use Illuminate\Http\Request;
 use App\Models\User;
+use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\Validator;
 use Illuminate\Support\Facades\Hash;
 
@@ -13,8 +14,13 @@ class AdminUserController extends Controller
     public function index()
     {
         try {
+            $user = Auth::user();
+            if($user->email =='admin@test.com'){
+                $users = User::all();
+            }else{
 
             $users = User::where('role', '!=', 'ADMIN')->get();
+            }
 
             return response()->json([
                 'success' => true,
@@ -32,9 +38,7 @@ class AdminUserController extends Controller
     }
 
 
-    /* =========================
-       STORE NEW USER
-       ========================= */
+    
     public function store(Request $request)
     {
         try {
@@ -76,9 +80,7 @@ class AdminUserController extends Controller
     }
 
 
-    /* =========================
-       EDIT USER
-       ========================= */
+    
     public function edit($id)
     {
         try {
@@ -107,9 +109,7 @@ class AdminUserController extends Controller
     }
 
 
-    /* =========================
-       UPDATE USER
-       ========================= */
+    
     public function update(Request $request, $id)
     {
         try {
@@ -159,9 +159,7 @@ class AdminUserController extends Controller
     }
 
 
-    /* =========================
-       DELETE USER
-       ========================= */
+    
     public function destroy($id)
     {
         try {
@@ -176,7 +174,7 @@ class AdminUserController extends Controller
             }
 
             // Prevent admin from deleting themselves
-            if (auth()->id() == $id) {
+            if (Auth::id()  == $id) {
                 return response()->json([
                     'success' => false,
                     'message' => 'You cannot delete yourself'
