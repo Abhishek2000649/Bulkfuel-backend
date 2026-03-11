@@ -46,7 +46,8 @@ class AdminUserController extends Controller
             $validator = Validator::make($request->all(), [
                 'name'     => 'required|string|max:255',
                 'email'    => 'required|email|unique:users,email',
-                'password' => 'required|min:6'
+                'password' => 'required|min:6',
+                'role'     => 'required|in:ADMIN,USER,delivery_agent',
             ]);
 
             if ($validator->fails()) {
@@ -61,7 +62,7 @@ class AdminUserController extends Controller
                 'name'     => $request->name,
                 'email'    => $request->email,
                 'password' => Hash::make($request->password),
-                'role'     => 'USER'
+                'role'     => $request->role,
             ]);
 
             return response()->json([
