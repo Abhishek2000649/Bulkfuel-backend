@@ -222,7 +222,7 @@ public function placeOrder(Request $request)
             $order = Order::create([
                 'user_id'       => $userId,
                 'total_amount'  => $totalAmount,
-                'status'        => 'PENDING',
+                'status'        => 'CONFIRMED',
                 'address'       => $validated['address'],
                 'city'          => $validated['city'],
                 'state'         => $validated['state'],
