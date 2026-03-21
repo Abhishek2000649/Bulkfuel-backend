@@ -11,7 +11,8 @@ class Product extends Model
         'name',
         'price',
         'stock',
-        'description'
+        'description',
+        'payment_type',
     ];
 
     protected $appends = ['totalStock'];

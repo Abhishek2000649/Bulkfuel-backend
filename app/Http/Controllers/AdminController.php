@@ -80,7 +80,8 @@ class AdminController extends Controller
             'price'       => 'required|numeric',
             'stock'       => 'required|numeric|min:0',
             'description' => 'required|string',
-            'category_id' => 'required|exists:categories,id'
+            'category_id' => 'required|exists:categories,id',
+              'payment_type' => 'required|in:cash,online,both',
         ]);
 
         Product::create([
@@ -89,6 +90,7 @@ class AdminController extends Controller
             'stock'       => $request->stock,
             'description' => $request->description,
             'category_id' => $request->category_id,
+             'payment_type' => $request->payment_type,
         ]);
 
         return response()->json([
