@@ -99,7 +99,7 @@ class AdminController extends Controller
             'description' => [
                 'required',
                 'string',
-                'min:10'
+                'min:0'
             ],
             'category_id' => [
                 'required',
