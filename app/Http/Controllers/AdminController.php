@@ -5,7 +5,9 @@ use App\Models\Product;
 use App\Models\Category;
 use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\Validator;
-
+use Illuminate\Validation\ValidationException;
+use Illuminate\Database\QueryException;
+use Exception;
 class AdminController extends Controller
 {
     public function dashboard()
@@ -73,31 +75,77 @@ class AdminController extends Controller
     }
 
     // Store new product
-    public function store(Request $request)
-    {
-        $request->validate([
-            'name'        => 'required|string|max:255',
-            'price'       => 'required|numeric',
-            'stock'       => 'required|numeric|min:0',
-            'description' => 'required|string',
-            'category_id' => 'required|exists:categories,id',
-              'payment_type' => 'required|in:cash,online,both',
+   public function store(Request $request)
+{
+    try {
+
+        // ✅ VALIDATION
+        $validated = $request->validate([
+            'name' => [
+                'required',
+                'string',
+                'max:255'
+            ],
+            'price' => [
+                'required',
+                'numeric',
+                'min:0'
+            ],
+            'stock' => [
+                'required',
+                'integer',
+                'min:0'
+            ],
+            'description' => [
+                'required',
+                'string',
+                'min:10'
+            ],
+            'category_id' => [
+                'required',
+                'integer',
+                'exists:categories,id'
+            ],
+            'payment_type' => [
+                'required',
+                'in:cash,online,both'
+            ],
         ]);
 
-        Product::create([
-            'name'        => $request->name,
-            'price'       => $request->price,
-            'stock'       => $request->stock,
-            'description' => $request->description,
-            'category_id' => $request->category_id,
-             'payment_type' => $request->payment_type,
-        ]);
+        // ✅ CREATE PRODUCT
+        $product = Product::create($validated);
 
         return response()->json([
-            'status' => true
-        ]);
-    }
+            'status'  => true,
+            'message' => 'Product created successfully',
+            'data'    => $product
+        ], 201);
 
+    } catch (ValidationException $e) {
+
+        return response()->json([
+            'status'  => false,
+            'message' => 'Validation failed',
+            'errors'  => $e->errors()
+        ], 422);
+
+    } catch (QueryException $e) {
+
+        return response()->json([
+            'status'  => false,
+            'message' => 'Database error occurred',
+            'error'   => $e->getMessage() // remove in production if needed
+        ], 500);
+
+    } catch (Exception $e) {
+
+        return response()->json([
+            'status'  => false,
+            'message' => 'Something went wrong',
+            'error'   => $e->getMessage()
+        ], 500);
+    }
+}
     // Edit product page
     public function edit($id)
     {
