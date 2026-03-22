@@ -20,7 +20,7 @@ class StockController extends Controller
     {
         try {
 
-            $data = WarehouseProduct::with(['warehouse', 'product.category'])->get();
+            $data = WarehouseProduct::with(['warehouse', 'product.category'])->latest()->get();
 
             if ($data->isEmpty()) {
                 return response()->json([
