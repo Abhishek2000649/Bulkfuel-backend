@@ -352,6 +352,7 @@ public function updateBasic(Request $request)
         $validated = $request->validate([
             'name'  => 'required|string|max:255',
             'email' => 'required|email|unique:users,email,' . $user->id,
+            'phone' => 'required|digits:10|unique:users,phone,' . $user->id,
         ]);
 
         // 3️⃣ Update
@@ -359,7 +360,7 @@ public function updateBasic(Request $request)
 
         return response()->json([
             'status'  => true,
-            'message' => 'Name & email updated successfully.',
+            'message' => 'Profile updated successfully.',
             'data'    => $user
         ], 200);
 
