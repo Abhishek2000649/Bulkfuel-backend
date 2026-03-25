@@ -19,100 +19,99 @@ use Exception;
 class OrderController extends Controller
 {
 
-  public function checkout(Request $request)
-{
-    try {
+    public function checkout(Request $request)
+    {
+        try {
 
-        if (!Auth::check()) {
-            return response()->json([
-                'status'  => false,
-                'message' => 'Unauthorized. Please login first.'
-            ], 401);
-        }
-
-        $validated = $request->validate([
-            'cart_ids'   => 'required|array|min:1',
-            'cart_ids.*' => 'integer|exists:carts,id'
-        ]);
-
-        $cartIds = $validated['cart_ids'];
-
-        // ✅ FIRST FETCH CART
-        $cartItems = Cart::with('product')
-            ->where('user_id', Auth::id())
-            ->whereIn('id', $cartIds)
-            ->get();
-
-        if ($cartItems->isEmpty()) {
-            return response()->json([
-                'status'  => false,
-                'message' => 'Invalid cart selection'
-            ], 404);
-        }
-
-        foreach ($cartItems as $item) {
-            if (!$item->product) {
+            if (!Auth::check()) {
                 return response()->json([
                     'status'  => false,
-                    'message' => 'Product not found in cart.'
+                    'message' => 'Unauthorized. Please login first.'
+                ], 401);
+            }
+
+            $validated = $request->validate([
+                'cart_ids'   => 'required|array|min:1',
+                'cart_ids.*' => 'integer|exists:carts,id'
+            ]);
+
+            $cartIds = $validated['cart_ids'];
+
+            // ✅ FIRST FETCH CART
+            $cartItems = Cart::with('product')
+                ->where('user_id', Auth::id())
+                ->whereIn('id', $cartIds)
+                ->get();
+
+            if ($cartItems->isEmpty()) {
+                return response()->json([
+                    'status'  => false,
+                    'message' => 'Invalid cart selection'
                 ], 404);
             }
-        }
 
-        // ✅ NOW APPLY PAYMENT LOGIC
-        $hasOnlineOnly = false;
-        $hasCashOnly   = false;
-        $allBoth       = true;
-
-        foreach ($cartItems as $item) {
-            $type = $item->product->payment_type;
-
-            if ($type === 'online') {
-                $hasOnlineOnly = true;
+            foreach ($cartItems as $item) {
+                if (!$item->product) {
+                    return response()->json([
+                        'status'  => false,
+                        'message' => 'Product not found in cart.'
+                    ], 404);
+                }
             }
 
-            if ($type === 'cash') {
-                $hasCashOnly = true;
+            // ✅ NOW APPLY PAYMENT LOGIC
+            $hasOnlineOnly = false;
+            $hasCashOnly   = false;
+            $allBoth       = true;
+
+            foreach ($cartItems as $item) {
+                $type = $item->product->payment_type;
+
+                if ($type === 'online') {
+                    $hasOnlineOnly = true;
+                }
+
+                if ($type === 'cash') {
+                    $hasCashOnly = true;
+                }
+
+                if ($type !== 'both') {
+                    $allBoth = false;
+                }
             }
 
-            if ($type !== 'both') {
-                $allBoth = false;
+            // ✅ FINAL DECISION
+            if ($hasOnlineOnly) {
+                $allowedPayment = ['online'];
+            } elseif ($allBoth) {
+                $allowedPayment = ['cash', 'online'];
+            } elseif ($hasCashOnly) {
+                $allowedPayment = ['cash'];
+            } else {
+                $allowedPayment = ['online'];
             }
+
+            // ✅ TOTAL
+            $totalAmount = $cartItems->sum(function ($item) {
+                return $item->product->price * $item->quantity;
+            });
+
+            return response()->json([
+                'status'         => true,
+                'cartItems'      => $cartItems,
+                'totalAmount'    => $totalAmount,
+                'user'           => Auth::user()->load('address'),
+                'cartIds'        => $cartIds,
+                'allowedPayment' => $allowedPayment
+            ], 200);
+        } catch (Exception $e) {
+
+            return response()->json([
+                'status'  => false,
+                'message' => 'Something went wrong.'
+            ], 500);
         }
-
-        // ✅ FINAL DECISION
-        if ($hasOnlineOnly) {
-            $allowedPayment = ['online'];
-        } elseif ($allBoth) {
-            $allowedPayment = ['cash', 'online'];
-        } elseif ($hasCashOnly) {
-            $allowedPayment = ['cash'];
-        } else {
-            $allowedPayment = ['online'];
-        }
-
-        // ✅ TOTAL
-        $totalAmount = $cartItems->sum(function ($item) {
-            return $item->product->price * $item->quantity;
-        });
-
-        return response()->json([
-            'status'         => true,
-            'cartItems'      => $cartItems,
-            'totalAmount'    => $totalAmount,
-            'user'           => Auth::user()->load('address'),
-            'cartIds'        => $cartIds,
-            'allowedPayment' => $allowedPayment
-        ], 200);
-
-    } catch (Exception $e) {
-
-        return response()->json([
-            'status'  => false,
-            'message' => 'Something went wrong.'
-        ], 500);
     }
-}
 
 
     public function placeOrder(Request $request)
@@ -120,15 +119,19 @@ class OrderController extends Controller
         try {
 
 
+
             $validated = $request->validate([
                 'address'        => 'required|string',
                 'city'           => 'required|string',
+                'phone'          => 'required|string',
                 'state'          => 'required|string',
                 'pincode'        => 'required|string',
                 'payment_method' => 'required|string',
                 'cart_ids'       => 'required|array|min:1',
                 'cart_ids.*'     => 'integer|exists:carts,id'
             ]);
+
+           
 
             $cartIds = $validated['cart_ids'];
 
@@ -218,6 +221,9 @@ class OrderController extends Controller
                         'pincode' => $validated['pincode'],
                     ]);
                 }
+                Auth::user()->update([
+                    'phone' => $validated['phone']
+                ]);
 
                 // Create Order
                 $order = Order::create([
