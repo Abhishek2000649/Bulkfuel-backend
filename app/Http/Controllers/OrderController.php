@@ -6,6 +6,7 @@ use App\Models\Address;
 use App\Models\Cart;
 use App\Models\Order;
 use App\Models\OrderWarehouse;
+use App\Models\User;
 use App\Models\WarehouseProduct;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Auth;
@@ -131,7 +132,7 @@ class OrderController extends Controller
                 'cart_ids.*'     => 'integer|exists:carts,id'
             ]);
 
-           
+
 
             $cartIds = $validated['cart_ids'];
 
@@ -190,7 +191,19 @@ class OrderController extends Controller
 
                 $itemWarehouseMap[$item->id] = $selectedWarehouse;
             }
+            $userId = Auth::id();
+            $phone  = $request->phone;
 
+            $phoneExists = User::where('phone', $phone)
+                ->where('id', '!=', $userId)
+                ->exists();
+
+            if ($phoneExists) {
+                return response()->json([
+                    'status'  => false,
+                    'message' => 'Phone number already used by another user'
+                ], 400);
+            }
 
             DB::transaction(function () use (
                 $validated,
