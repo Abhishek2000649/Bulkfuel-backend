@@ -1,4 +1,5 @@
 <?php
+
 use App\Http\Controllers\Admin\SettlementController;
 use Illuminate\Support\Facades\Route;
 use Illuminate\Http\Request;
@@ -12,6 +13,7 @@ use App\Http\Controllers\Admin\AdminUserController;
 use App\Http\Controllers\Admin\CategoryController;
 use App\Http\Controllers\Admin\StockController;
 use App\Http\Controllers\Admin\WarehouseController;
+use App\Http\Controllers\ChatController;
 use App\Http\Controllers\Delivery\DeliveryDashboardController;
 
 Route::get('/test', function () {
@@ -29,13 +31,12 @@ Route::middleware('auth:sanctum')->group(function () {
         ->name('logout');
     Route::get('/me', [AuthController::class, 'me']);
     Route::get('/profile', [UserController::class, 'profile'])
-            ->name('user.profile');
+        ->name('user.profile');
     // Route::post('/profile', [UserController::class, 'saveProfile']);
 
-      Route::post('/profile/basic', [UserController::class, 'updateBasic']);
+    Route::post('/profile/basic', [UserController::class, 'updateBasic']);
     Route::post('/profile/address', [UserController::class, 'updateAddress']);
     Route::post('/profile/password', [UserController::class, 'updatePassword']);
-
 });
 
 // Route::middleware(['auth:sanctum'])->get('user/', [UserController::class, 'home'])
@@ -49,7 +50,7 @@ Route::middleware(['auth:sanctum', 'role:USER'])
 
         Route::post('/order', [UserController::class, 'placeOrder'])
             ->name('user.order');
-        
+
         // Route::get('/', [UserController::class, 'home'])
         //     ->name('user.dashboard');
 
@@ -74,17 +75,25 @@ Route::middleware(['auth:sanctum', 'role:USER'])
         Route::delete('/cart/remove/{id}', [CartController::class, 'remove'])
             ->name('user.cart.remove');
 
-        /* CHECKOUT */
         Route::post('/checkout', [OrderController::class, 'checkout'])
             ->name('user.checkout');
 
         Route::post('/place-order', [OrderController::class, 'placeOrder'])
             ->name('user.place.order');
+        Route::post('/chat/send', [ChatController::class, 'sendMessage']);
+        Route::get('/chat/messages/{conversationId?}', [ChatController::class, 'getMessages']);
+        Route::post('/chat/seen', [ChatController::class, 'markSeen']);
     });
 
 Route::middleware(['auth:sanctum', 'role:ADMIN'])
     ->prefix('admin')
     ->group(function () {
+        // ✅ ADMIN CHAT (correct)
+        // Route::get('/chats', [ChatController::class, 'adminChats']);
+        Route::get('/contactusers', [ChatController::class, 'contactusers']);
+        Route::get('/chat/messages/{conversationId}', [ChatController::class, 'getMessages']);
+        Route::post('/chat/send', [ChatController::class, 'sendMessage']);
+        Route::post('/chat/seen', [ChatController::class, 'markSeen']);
 
         Route::get('/', [AdminController::class, 'dashboard'])
             ->name('admin.dashboard');
@@ -108,7 +117,7 @@ Route::middleware(['auth:sanctum', 'role:ADMIN'])
                 ->name('admin.products.delete');
         });
 
-           
+
 
         // 1️⃣ Get all delivery agents
         Route::get('/delivery-agents', [SettlementController::class, 'deliveryAgents']);
@@ -137,12 +146,14 @@ Route::middleware(['auth:sanctum', 'role:ADMIN'])
 
             Route::delete('/delete/{id}', [AdminUserController::class, 'destroy'])
                 ->name('admin.users.delete');
+            // CHAT (User → Admin)
+
         });
 
         /* ORDERS */
         Route::get('/orders', [AdminOrderController::class, 'index'])
             ->name('admin.orders');
-         Route::get('/orders/history', [AdminOrderController::class, 'history']);
+        Route::get('/orders/history', [AdminOrderController::class, 'history']);
 
         Route::post('/orders/{id}/status', [AdminOrderController::class, 'updateStatus'])
             ->name('admin.orders.status');
@@ -210,5 +221,9 @@ Route::middleware(['auth:sanctum', 'role:delivery_agent'])
         Route::post('/reject/{id}', [DeliveryDashboardController::class, 'reject']);
         Route::post('/delivered/{id}', [DeliveryDashboardController::class, 'delivered']);
         Route::post('/cancel/{id}', [DeliveryDashboardController::class, 'cancel']);
-          Route::get('/history', [DeliveryDashboardController::class, 'history']);
+        Route::get('/history', [DeliveryDashboardController::class, 'history']);
+        // CHAT (Delivery Agent → Admin)
+        Route::post('/chat/send', [ChatController::class, 'sendMessage']);
+        Route::get('/chat/messages/{conversationId?}', [ChatController::class, 'getMessages']);
+        Route::post('/chat/seen', [ChatController::class, 'markSeen']);
     });
