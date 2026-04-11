@@ -1,5 +1,7 @@
 <?php
+
 namespace App\Http\Controllers;
+
 use Illuminate\Http\Request;
 use App\Models\Product;
 use App\Models\Category;
@@ -7,7 +9,10 @@ use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\Validator;
 use Illuminate\Validation\ValidationException;
 use Illuminate\Database\QueryException;
+use Intervention\Image\ImageManager;
+use Intervention\Image\Drivers\Gd\Driver;
 use Exception;
+
 class AdminController extends Controller
 {
     public function dashboard()
@@ -36,8 +41,14 @@ class AdminController extends Controller
                 ], 401);
             }
 
-            $products = Product::with('category')->get();
+            $products = Product::with('category')->get()->map(function ($product) {
 
+                $product->image_url = $product->image
+                    ? asset($product->image)
+                    : null;
+
+                return $product;
+            });
             if ($products->isEmpty()) {
                 return response()->json([
                     'success' => false,
@@ -53,7 +64,6 @@ class AdminController extends Controller
                 'message' => 'Products fetched successfully.',
                 'data' => $products
             ], 200);
-
         } catch (\Illuminate\Database\QueryException $e) {
 
             return response()->json([
@@ -62,7 +72,6 @@ class AdminController extends Controller
                 'message' => 'Database error occurred while fetching products.',
                 'data' => null
             ], 500);
-
         } catch (\Throwable $e) {
 
             return response()->json([
@@ -75,115 +84,123 @@ class AdminController extends Controller
     }
 
     // Store new product
-   public function store(Request $request)
-{
-    try {
 
-        // ✅ VALIDATION
-        $validated = $request->validate([
-            'name' => [
-                'required',
-                'string',
-                'max:255'
-            ],
-            'price' => [
-                'required',
-                'numeric',
-                'min:0'
-            ],
-            'stock' => [
-                'required',
-                'integer',
-                'min:0'
-            ],
-            'description' => [
-                'required',
-                'string',
-                'min:0'
-            ],
-            'category_id' => [
-                'required',
-                'integer',
-                'exists:categories,id'
-            ],
-            'payment_type' => [
-                'required',
-                'in:cash,online,both'
-            ],
-        ]);
 
-        // ✅ CREATE PRODUCT
-        $product = Product::create($validated);
+    public function store(Request $request)
+    {
 
-        return response()->json([
-            'status'  => true,
-            'message' => 'Product created successfully',
-            'data'    => $product
-        ], 201);
 
-    } catch (ValidationException $e) {
+        try {
 
-        return response()->json([
-            'status'  => false,
-            'message' => 'Validation failed',
-            'errors'  => $e->errors()
-        ], 422);
+            $validated = $request->validate([
+                'name'          => 'required|string|max:255',
+                'price'         => 'required|numeric|min:0',
+                'stock'         => 'required|integer|min:0',
+                'description'   => 'required|string',
+                'category_id'   => 'required|integer|exists:categories,id',
+                'payment_type'  => 'required|in:cash,online,both',
+                'image' => 'nullable|image|mimes:jpg,jpeg,png,webp|max:5120'
+            ]);
 
-    } catch (QueryException $e) {
+            if ($request->file('image')) {
 
-        return response()->json([
-            'status'  => false,
-            'message' => 'Database error occurred',
-            'error'   => $e->getMessage() // remove in production if needed
-        ], 500);
+                $file = $request->file('image');
 
-    } catch (Exception $e) {
+                $manager = new ImageManager(new Driver());
 
-        return response()->json([
-            'status'  => false,
-            'message' => 'Something went wrong',
-            'error'   => $e->getMessage()
-        ], 500);
+                $image = $manager->read($file->getPathname());
+
+                $image->cover(256, 160);
+
+                $fileName = time() . '.jpg';
+
+                $path = public_path('images');
+
+                if (!file_exists($path)) {
+                    mkdir($path, 0755, true);
+                }
+
+                $image->save($path . '/' . $fileName);
+
+                $validated['image'] = 'images/' . $fileName;
+            }
+            $product = Product::create($validated);
+
+            return response()->json([
+                'status'  => true,
+                'message' => 'Product created successfully',
+                'data'    => $product
+            ], 201);
+        } catch (ValidationException $e) {
+
+            return response()->json([
+                'status'  => false,
+                'message' => 'Validation failed',
+                'errors'  => $e->errors()
+            ], 422);
+        } catch (QueryException $e) {
+
+            return response()->json([
+                'status'  => false,
+                'message' => 'Database error occurred',
+                'error'   => $e->getMessage()
+            ], 500);
+        } catch (\Exception $e) {
+
+            return response()->json([
+                'status'  => false,
+                'message' => 'Something went wrong',
+                'error'   => $e->getMessage()
+            ], 500);
+        }
     }
-}
     // Edit product page
     public function edit($id)
     {
         try {
 
+            // 🔐 AUTH CHECK
             if (!Auth::guard('sanctum')->check()) {
                 return response()->json([
-                    'success' => false,
+                    'status' => false,
                     'status_code' => 401,
                     'message' => 'Unauthorized. Please login first.',
                     'data' => null
                 ], 401);
             }
 
+            // 🔢 VALIDATE ID
             if (!is_numeric($id)) {
                 return response()->json([
-                    'success' => false,
+                    'status' => false,
                     'status_code' => 400,
                     'message' => 'Invalid product ID.',
                     'data' => null
                 ], 400);
             }
 
+            // 🔍 FIND PRODUCT
             $product = Product::find($id);
 
             if (!$product) {
                 return response()->json([
-                    'success' => false,
+                    'status' => false,
                     'status_code' => 404,
                     'message' => 'Product not found.',
                     'data' => null
                 ], 404);
             }
 
+            // 🖼️ ADD IMAGE URL
+            $product->image_url = $product->image
+                ? asset($product->image)
+                : null;
+
+            // 📦 GET CATEGORIES
             $categories = Category::all();
 
             return response()->json([
-                'success' => true,
+                'status' => true,
                 'status_code' => 200,
                 'message' => 'Product details fetched successfully.',
                 'data' => [
@@ -191,109 +208,144 @@ class AdminController extends Controller
                     'categories' => $categories
                 ]
             ], 200);
+        }
 
-        } catch (\Illuminate\Database\QueryException $e) {
-
+        // ❌ DATABASE ERROR
+        catch (\Illuminate\Database\QueryException $e) {
             return response()->json([
-                'success' => false,
+                'status' => false,
                 'status_code' => 500,
                 'message' => 'Database error occurred while fetching product.',
-                'data' => null
+                'error' => $e->getMessage()
             ], 500);
+        }
 
-        } catch (\Throwable $e) {
-
+        // ❌ GENERAL ERROR
+        catch (\Throwable $e) {
             return response()->json([
-                'success' => false,
+                'status' => false,
                 'status_code' => 500,
                 'message' => 'Unable to load product details.',
-                'data' => null
+                'error' => $e->getMessage()
             ], 500);
         }
     }
 
-    // Update product
     public function update(Request $request, $id)
     {
         try {
 
+            // 🔐 AUTH CHECK
             if (!Auth::guard('sanctum')->check()) {
                 return response()->json([
-                    'success' => false,
+                    'status' => false,
                     'status_code' => 401,
                     'message' => 'Unauthorized. Please login first.',
                     'data' => null
                 ], 401);
             }
 
+            // 🔢 VALIDATE ID
             if (!is_numeric($id)) {
                 return response()->json([
-                    'success' => false,
+                    'status' => false,
                     'status_code' => 400,
                     'message' => 'Invalid product ID.',
                     'data' => null
                 ], 400);
             }
 
-            $validator = Validator::make($request->all(), [
-                'name'        => 'required|string|max:255',
-                'price'       => 'required|numeric',
-                'stock'       => 'required|numeric|min:0',
-                'description' => 'required|string',
-                'category_id' => 'required|exists:categories,id'
+            // 📦 VALIDATION
+            $validated = $request->validate([
+                'name'          => 'required|string|max:255',
+                'price'         => 'required|numeric|min:0',
+                'stock'         => 'required|integer|min:0',
+                'description'   => 'required|string',
+                'category_id'   => 'required|exists:categories,id',
+                'payment_type'  => 'required|in:cash,online,both',
+                'image'         => 'nullable|image|mimes:jpg,jpeg,png,webp|max:5120'
             ]);
 
-            if ($validator->fails()) {
-                return response()->json([
-                    'success' => false,
-                    'status_code' => 422,
-                    'message' => 'Validation error.',
-                    'errors' => $validator->errors()
-                ], 422);
-            }
-
+            // 🔍 FIND PRODUCT
             $product = Product::find($id);
 
             if (!$product) {
                 return response()->json([
-                    'success' => false,
+                    'status' => false,
                     'status_code' => 404,
                     'message' => 'Product not found.',
                     'data' => null
                 ], 404);
             }
 
-            $product->update([
-                'name'        => $request->name,
-                'price'       => $request->price,
-                'stock'       => $request->stock,
-                'description' => $request->description,
-                'category_id' => $request->category_id,
-            ]);
+            // 🖼️ IMAGE UPLOAD
+            if ($request->hasFile('image')) {
 
+                // ❌ DELETE OLD IMAGE (SAFE)
+                if ($product->image && file_exists(public_path($product->image))) {
+                    @unlink(public_path($product->image));
+                }
+
+                $file = $request->file('image');
+
+                $manager = new ImageManager(new Driver());
+                $image = $manager->read($file->getPathname());
+
+                // ✂️ RESIZE / CROP
+                $image->cover(256, 160);
+
+                $fileName = time() . '.jpg';
+                $path = public_path('images');
+
+                if (!file_exists($path)) {
+                    mkdir($path, 0755, true);
+                }
+
+                $image->save($path . '/' . $fileName);
+
+                // ✅ ADD IMAGE TO VALIDATED DATA
+                $validated['image'] = 'images/' . $fileName;
+            }
+
+            // 🔄 UPDATE PRODUCT
+            $product->update($validated);
+
+            // 📤 RESPONSE
             return response()->json([
-                'success' => true,
+                'status' => true,
                 'status_code' => 200,
                 'message' => 'Product updated successfully.',
                 'data' => $product
             ], 200);
+        }
 
-        } catch (\Illuminate\Database\QueryException $e) {
-
+        // ❌ VALIDATION ERROR
+        catch (\Illuminate\Validation\ValidationException $e) {
             return response()->json([
-                'success' => false,
+                'status' => false,
+                'status_code' => 422,
+                'message' => 'Validation failed.',
+                'errors' => $e->errors()
+            ], 422);
+        }
+
+        // ❌ DATABASE ERROR
+        catch (\Illuminate\Database\QueryException $e) {
+            return response()->json([
+                'status' => false,
                 'status_code' => 500,
-                'message' => 'Database error occurred while updating product.',
-                'data' => null
+                'message' => 'Database error occurred.',
+                'error' => $e->getMessage()
             ], 500);
+        }
 
-        } catch (\Throwable $e) {
-
+        // ❌ GENERAL ERROR
+        catch (\Throwable $e) {
             return response()->json([
-                'success' => false,
+                'status' => false,
                 'status_code' => 500,
-                'message' => 'Unable to update product.',
-                'data' => null
+                'message' => 'Something went wrong.',
+                'error' => $e->getMessage()
             ], 500);
         }
     }
@@ -303,60 +355,71 @@ class AdminController extends Controller
     {
         try {
 
+            // 🔐 AUTH CHECK
             if (!Auth::guard('sanctum')->check()) {
                 return response()->json([
-                    'success' => false,
+                    'status' => false,
                     'status_code' => 401,
                     'message' => 'Unauthorized. Please login first.',
                     'data' => null
                 ], 401);
             }
 
+            // 🔢 VALIDATE ID
             if (!is_numeric($id)) {
                 return response()->json([
-                    'success' => false,
+                    'status' => false,
                     'status_code' => 400,
                     'message' => 'Invalid product ID.',
                     'data' => null
                 ], 400);
             }
 
+            // 🔍 FIND PRODUCT
             $product = Product::find($id);
 
             if (!$product) {
                 return response()->json([
-                    'success' => false,
+                    'status' => false,
                     'status_code' => 404,
                     'message' => 'Product not found.',
                     'data' => null
                 ], 404);
             }
 
+            // 🖼️ DELETE IMAGE (IMPORTANT 🔥)
+            if ($product->image && file_exists(public_path($product->image))) {
+                @unlink(public_path($product->image)); // safe delete
+            }
+
+            // 🗑️ DELETE PRODUCT
             $product->delete();
 
             return response()->json([
-                'success' => true,
+                'status' => true,
                 'status_code' => 200,
-                'message' => 'Product deleted successfully.',
+                'message' => 'Product and image deleted successfully.',
                 'data' => null
             ], 200);
+        }
 
-        } catch (\Illuminate\Database\QueryException $e) {
-
+        // ❌ DATABASE ERROR
+        catch (\Illuminate\Database\QueryException $e) {
             return response()->json([
-                'success' => false,
+                'status' => false,
                 'status_code' => 500,
                 'message' => 'Product cannot be deleted because it is linked to other records.',
-                'data' => null
+                'error' => $e->getMessage()
             ], 500);
+        }
 
-        } catch (\Throwable $e) {
-
+        // ❌ GENERAL ERROR
+        catch (\Throwable $e) {
             return response()->json([
-                'success' => false,
+                'status' => false,
                 'status_code' => 500,
                 'message' => 'Unable to delete product.',
-                'data' => null
+                'error' => $e->getMessage()
             ], 500);
         }
     }

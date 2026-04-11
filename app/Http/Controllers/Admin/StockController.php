@@ -1,5 +1,7 @@
 <?php
+
 namespace App\Http\Controllers\Admin;
+
 use App\Http\Controllers\Controller;
 use App\Models\Warehouse;
 use App\Models\Product;
@@ -14,14 +16,26 @@ use Illuminate\Support\Facades\Validator;
 use Symfony\Component\HttpKernel\Exception\HttpException;
 use Symfony\Component\HttpKernel\Exception\NotFoundHttpException;
 use Throwable;
+
 class StockController extends Controller
 {
     public function index()
     {
         try {
 
-            $data = WarehouseProduct::with(['warehouse', 'product.category'])->latest()->get();
+            $data = WarehouseProduct::with(['warehouse', 'product.category'])
+                ->latest()
+                ->get()
+                ->map(function ($item) {
 
+                    if ($item->product && $item->product->image) {
+                        $item->product->image_url = asset($item->product->image);
+                    } else {
+                        $item->product->image_url = null;
+                    }
+
+                    return $item;
+                });
             if ($data->isEmpty()) {
                 return response()->json([
                     'status' => false,
@@ -125,231 +139,221 @@ class StockController extends Controller
         }
     }
 
-   public function store(Request $request)
-{
-    try {
+    public function store(Request $request)
+    {
+        try {
 
-        // Manual validation to return JSON errors
-        $validator = Validator::make($request->all(), [
-            'warehouse_id'   => 'required|exists:warehouses,id',
-            'product_id'     => 'required|exists:products,id',
-            'stock_quantity' => 'required|numeric|min:1',
-        ]);
+            // Manual validation to return JSON errors
+            $validator = Validator::make($request->all(), [
+                'warehouse_id'   => 'required|exists:warehouses,id',
+                'product_id'     => 'required|exists:products,id',
+                'stock_quantity' => 'required|numeric|min:1',
+            ]);
 
-        if ($validator->fails()) {
+            if ($validator->fails()) {
+                return response()->json([
+                    'status'  => false,
+                    'message' => 'Validation error',
+                    'errors'  => $validator->errors()
+                ], 422);
+            }
+
+            $productStock = Product::where('id', $request->product_id)->value('stock');
+
+            if ($productStock < $request->stock_quantity) {
+                return response()->json([
+                    'status'  => false,
+                    'message' => 'Insufficient stock available'
+                ], 422);
+            }
+
+            $exists = WarehouseProduct::where('warehouse_id', $request->warehouse_id)
+                ->where('product_id', $request->product_id)
+                ->exists();
+
+            if ($exists) {
+                return response()->json([
+                    'status'  => false,
+                    'message' => 'Stock already exists for this warehouse and product'
+                ], 422);
+            }
+
+            WarehouseProduct::create([
+                'warehouse_id'   => $request->warehouse_id,
+                'product_id'     => $request->product_id,
+                'stock_quantity' => $request->stock_quantity,
+            ]);
+
+            Product::where('id', $request->product_id)
+                ->decrement('stock', $request->stock_quantity);
+
+            return response()->json([
+                'status'  => true,
+                'message' => 'Stock added successfully'
+            ], 201);
+        } catch (QueryException $e) {
+
             return response()->json([
                 'status'  => false,
-                'message' => 'Validation error',
-                'errors'  => $validator->errors()
-            ], 422);
-        }
+                'message' => 'Database error',
+                'error'   => $e->getMessage()
+            ], 500);
+        } catch (Exception $e) {
 
-        $productStock = Product::where('id', $request->product_id)->value('stock');
-
-        if ($productStock < $request->stock_quantity) {
             return response()->json([
                 'status'  => false,
-                'message' => 'Insufficient stock available'
-            ], 422);
+                'message' => 'Something went wrong',
+                'error'   => $e->getMessage()
+            ], 500);
         }
-
-        $exists = WarehouseProduct::where('warehouse_id', $request->warehouse_id)
-            ->where('product_id', $request->product_id)
-            ->exists();
-
-        if ($exists) {
-            return response()->json([
-                'status'  => false,
-                'message' => 'Stock already exists for this warehouse and product'
-            ], 422);
-        }
-
-        WarehouseProduct::create([
-            'warehouse_id'   => $request->warehouse_id,
-            'product_id'     => $request->product_id,
-            'stock_quantity' => $request->stock_quantity,
-        ]);
-
-        Product::where('id', $request->product_id)
-            ->decrement('stock', $request->stock_quantity);
-
-        return response()->json([
-            'status'  => true,
-            'message' => 'Stock added successfully'
-        ], 201);
-
-    } catch (QueryException $e) {
-
-        return response()->json([
-            'status'  => false,
-            'message' => 'Database error',
-            'error'   => $e->getMessage()
-        ], 500);
-
-    } catch (Exception $e) {
-
-        return response()->json([
-            'status'  => false,
-            'message' => 'Something went wrong',
-            'error'   => $e->getMessage()
-        ], 500);
     }
-}
     public function edit($id)
-{
-    try {
+    {
+        try {
 
-        $warehouses = Warehouse::all();
-        $products = Product::all();
-        $wareHouseProduct = WarehouseProduct::findOrFail($id);
+            $warehouses = Warehouse::all();
+            $products = Product::all();
+            $wareHouseProduct = WarehouseProduct::findOrFail($id);
 
-        return response()->json([
-            'status'  => true,
-            'message' => 'Data fetched successfully',
-            'data'    => $wareHouseProduct
-        ], 200);
-
-    } catch (ModelNotFoundException $e) {
-
-        return response()->json([
-            'status'  => false,
-            'message' => 'Record not found'
-        ], 404);
-
-    } catch (QueryException $e) {
-
-        return response()->json([
-            'status'  => false,
-            'message' => 'Database error',
-            'error'   => $e->getMessage()
-        ], 500);
-
-    } catch (Exception $e) {
-
-        return response()->json([
-            'status'  => false,
-            'message' => 'Something went wrong',
-            'error'   => $e->getMessage()
-        ], 500);
-    }
-}
-    public function update(Request $request, $id)
-{
-    try {
-
-        // Manual validation for JSON response
-        $validator = Validator::make($request->all(), [
-            'warehouse_id'   => 'required|exists:warehouses,id',
-            'product_id'     => 'required|exists:products,id',
-            'stock_quantity' => 'required|numeric|min:1',
-        ]);
-
-        if ($validator->fails()) {
             return response()->json([
-                'status'  => false,
-                'message' => 'Validation error',
-                'errors'  => $validator->errors()
-            ], 422);
-        }
+                'status'  => true,
+                'message' => 'Data fetched successfully',
+                'data'    => $wareHouseProduct
+            ], 200);
+        } catch (ModelNotFoundException $e) {
 
-        $warehouseProduct = WarehouseProduct::findOrFail($id);
-
-        $oldStock = $warehouseProduct->stock_quantity;
-        $productStock = Product::where('id', $request->product_id)->value('stock');
-
-        $difference = $request->stock_quantity - $oldStock;
-
-        if ($difference > 0 && $productStock < $difference) {
-            return response()->json([
-                'status'  => false,
-                'message' => 'Insufficient stock available'
-            ], 422);
-        }
-
-        // Update product stock
-        Product::where('id', $request->product_id)->update([
-            'stock' => $productStock - $difference
-        ]);
-
-        $warehouseProduct->update([
-            'warehouse_id'   => $request->warehouse_id,
-            'product_id'     => $request->product_id,
-            'stock_quantity' => $request->stock_quantity
-        ]);
-
-        return response()->json([
-            'status'  => true,
-            'message' => 'Stock updated successfully'
-        ], 200);
-
-    } catch (ModelNotFoundException $e) {
-
-        return response()->json([
-            'status'  => false,
-            'message' => 'Record not found'
-        ], 404);
-
-    } catch (QueryException $e) {
-
-        return response()->json([
-            'status'  => false,
-            'message' => 'Database error',
-            'error'   => $e->getMessage()
-        ], 500);
-
-    } catch (Exception $e) {
-
-        return response()->json([
-            'status'  => false,
-            'message' => 'Something went wrong',
-            'error'   => $e->getMessage()
-        ], 500);
-    }
-}
-
-   public function delete($id)
-{
-    try {
-
-        $warehouseProduct = WarehouseProduct::findOrFail($id);
-$oldStock = $warehouseProduct->stock_quantity;
-
-        if (!$warehouseProduct) {
             return response()->json([
                 'status'  => false,
                 'message' => 'Record not found'
             ], 404);
+        } catch (QueryException $e) {
+
+            return response()->json([
+                'status'  => false,
+                'message' => 'Database error',
+                'error'   => $e->getMessage()
+            ], 500);
+        } catch (Exception $e) {
+
+            return response()->json([
+                'status'  => false,
+                'message' => 'Something went wrong',
+                'error'   => $e->getMessage()
+            ], 500);
         }
-
-        $oldProductStock = Product::where('id', $warehouseProduct->product_id)
-            ->value('stock');
-
-        Product::where('id', $warehouseProduct->product_id)->update([
-            'stock' => ($oldProductStock + $oldStock),
-        ]);
-
-        $warehouseProduct->delete();
-
-        return response()->json([
-            'status'  => true,
-            'message' => 'Record deleted successfully'
-        ], 200);
-
-    } catch (QueryException $e) {
-
-        return response()->json([
-            'status'  => false,
-            'message' => 'Database error',
-            'error'   => $e->getMessage()
-        ], 500);
-
-    } catch (Exception $e) {
-
-        return response()->json([
-            'status'  => false,
-            'message' => 'Something went wrong',
-            'error'   => $e->getMessage()
-        ], 500);
     }
-}
+    public function update(Request $request, $id)
+    {
+        try {
+
+            // Manual validation for JSON response
+            $validator = Validator::make($request->all(), [
+                'warehouse_id'   => 'required|exists:warehouses,id',
+                'product_id'     => 'required|exists:products,id',
+                'stock_quantity' => 'required|numeric|min:1',
+            ]);
+
+            if ($validator->fails()) {
+                return response()->json([
+                    'status'  => false,
+                    'message' => 'Validation error',
+                    'errors'  => $validator->errors()
+                ], 422);
+            }
+
+            $warehouseProduct = WarehouseProduct::findOrFail($id);
+
+            $oldStock = $warehouseProduct->stock_quantity;
+            $productStock = Product::where('id', $request->product_id)->value('stock');
+
+            $difference = $request->stock_quantity - $oldStock;
+
+            if ($difference > 0 && $productStock < $difference) {
+                return response()->json([
+                    'status'  => false,
+                    'message' => 'Insufficient stock available'
+                ], 422);
+            }
+
+            // Update product stock
+            Product::where('id', $request->product_id)->update([
+                'stock' => $productStock - $difference
+            ]);
+
+            $warehouseProduct->update([
+                'warehouse_id'   => $request->warehouse_id,
+                'product_id'     => $request->product_id,
+                'stock_quantity' => $request->stock_quantity
+            ]);
+
+            return response()->json([
+                'status'  => true,
+                'message' => 'Stock updated successfully'
+            ], 200);
+        } catch (ModelNotFoundException $e) {
+
+            return response()->json([
+                'status'  => false,
+                'message' => 'Record not found'
+            ], 404);
+        } catch (QueryException $e) {
+
+            return response()->json([
+                'status'  => false,
+                'message' => 'Database error',
+                'error'   => $e->getMessage()
+            ], 500);
+        } catch (Exception $e) {
+
+            return response()->json([
+                'status'  => false,
+                'message' => 'Something went wrong',
+                'error'   => $e->getMessage()
+            ], 500);
+        }
+    }
+
+    public function delete($id)
+    {
+        try {
+
+            $warehouseProduct = WarehouseProduct::findOrFail($id);
+            $oldStock = $warehouseProduct->stock_quantity;
+
+            if (!$warehouseProduct) {
+                return response()->json([
+                    'status'  => false,
+                    'message' => 'Record not found'
+                ], 404);
+            }
+
+            $oldProductStock = Product::where('id', $warehouseProduct->product_id)
+                ->value('stock');
+
+            Product::where('id', $warehouseProduct->product_id)->update([
+                'stock' => ($oldProductStock + $oldStock),
+            ]);
+
+            $warehouseProduct->delete();
+
+            return response()->json([
+                'status'  => true,
+                'message' => 'Record deleted successfully'
+            ], 200);
+        } catch (QueryException $e) {
+
+            return response()->json([
+                'status'  => false,
+                'message' => 'Database error',
+                'error'   => $e->getMessage()
+            ], 500);
+        } catch (Exception $e) {
+
+            return response()->json([
+                'status'  => false,
+                'message' => 'Something went wrong',
+                'error'   => $e->getMessage()
+            ], 500);
+        }
+    }
 }

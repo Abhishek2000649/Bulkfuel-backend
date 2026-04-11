@@ -2,6 +2,7 @@
 
 namespace App\Http\Controllers;
 
+use App\Events\MessageSent;
 use Illuminate\Http\Request;
 use App\Models\Conversation;
 use App\Models\Message;
@@ -104,7 +105,7 @@ class ChatController extends Controller
                 'type' => $request->file ? 'file' : 'text',
                 'is_seen' => false
             ]);
-
+                broadcast(new MessageSent($message))->toOthers();
             $conversation->update([
                 'last_message' => $request->message ?? 'File',
                 'last_message_at' => now()

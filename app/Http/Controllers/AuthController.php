@@ -351,12 +351,27 @@ class AuthController extends Controller
         }
     }
 
+    // public function me(Request $request)
+    // {
+    //     return response()->json([
+    //         'user' => $request->user()->load('address')
+    //     ]);
+    // }
     public function me(Request $request)
-    {
-        return response()->json([
-            'user' => $request->user()->load('address')
-        ]);
+{
+    $user = $request->user()->load('address');
+
+    // 🔥 Add full image URL
+    if ($user->profile_image) {
+        $user->profile_image_url = asset($user->profile_image);
+    } else {
+        $user->profile_image_url = null;
     }
+
+    return response()->json([
+        'user' => $user
+    ]);
+}
 
     public function forgotPassword(Request $request)
     {
