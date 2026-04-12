@@ -315,7 +315,6 @@ class UserController extends Controller
 public function updateBasic(Request $request)
 {
     try {
-
         if (!Auth::guard('sanctum')->check()) {
             return response()->json([
                 'status'  => false,
