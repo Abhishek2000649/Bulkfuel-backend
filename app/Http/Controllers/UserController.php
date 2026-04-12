@@ -18,6 +18,7 @@ use Illuminate\Database\QueryException;
 use Exception;
 use Intervention\Image\Drivers\Gd\Driver;
 use Intervention\Image\ImageManager;
+use CloudinaryLabs\CloudinaryLaravel\Facades\Cloudinary;
 
 class UserController extends Controller
 {
@@ -268,52 +269,50 @@ class UserController extends Controller
     }
 
 
-    public function profile()
-    {
-        try {
+   public function profile()
+{
+    try {
 
-            if (!Auth::check()) {
-                return response()->json([
-                    'status' => false,
-                    'message' => 'Unauthorized. Please login first.'
-                ], 401);
-            }
-
-            $user = Auth::user();
-
-            if (!$user) {
-                return response()->json([
-                    'status' => false,
-                    'message' => 'User not found.'
-                ], 404);
-            }
-
-            // ✅ Load relation
-            $user->load('address');
-
-            // 🔥 ADD THIS (IMPORTANT)
-            if ($user->profile_image) {
-                $user->profile_image_url = asset($user->profile_image);
-            } else {
-                $user->profile_image_url = null;
-            }
-
-            return response()->json([
-                'status' => true,
-                'message' => 'Profile fetched successfully.',
-                'user' => $user
-            ], 200);
-        } catch (Exception $e) {
-
+        if (!Auth::check()) {
             return response()->json([
                 'status' => false,
-                'message' => 'Something went wrong.',
-                'error' => $e->getMessage()
-            ], 500);
+                'message' => 'Unauthorized. Please login first.'
+            ], 401);
         }
-    }
 
-  public function updateBasic(Request $request)
+        $user = Auth::user();
+
+        if (!$user) {
+            return response()->json([
+                'status' => false,
+                'message' => 'User not found.'
+            ], 404);
+        }
+
+        // relation load
+        $user->load('address');
+
+        // ✅ Cloudinary URL (Direct)
+        $user->profile_image_url = $user->profile_image ?? null;
+
+        return response()->json([
+            'status' => true,
+            'message' => 'Profile fetched successfully.',
+            'user' => $user
+        ], 200);
+
+    } catch (Exception $e) {
+
+        return response()->json([
+            'status' => false,
+            'message' => 'Something went wrong.',
+            'error' => $e->getMessage()
+        ], 500);
+    }
+}
+
+
+public function updateBasic(Request $request)
 {
     try {
 
@@ -341,57 +340,30 @@ class UserController extends Controller
             'image' => 'nullable|image|mimes:jpg,jpeg,png,webp|max:5120'
         ]);
 
-        $imagePath = $user->profile_image;
+        $imageUrl = $user->profile_image;
 
         if ($request->hasFile('image')) {
 
-            // ✅ Safe delete old image
-            if ($user->profile_image) {
-                $oldPath = public_path($user->profile_image);
-                if (file_exists($oldPath)) {
-                    @unlink($oldPath); // safe
-                }
-            }
-
             $file = $request->file('image');
 
-            $manager = new ImageManager(new Driver());
-            $image = $manager->read($file->getPathname());
+            $upload = Cloudinary::upload($file->getRealPath(), [
+                'folder' => 'profile_images',
+                'transformation' => [
+                    'width' => 200,
+                    'height' => 200,
+                    'crop' => 'fill'
+                ]
+            ]);
 
-            $image->cover(200, 200);
-
-            $fileName = time() . '.jpg';
-            $path = public_path('images/profile');
-
-            // ✅ Safe mkdir
-            if (!file_exists($path)) {
-                @mkdir($path, 0777, true);
-            }
-
-            // ✅ Ensure writable
-            if (!is_writable($path)) {
-                return response()->json([
-                    'status' => false,
-                    'message' => 'Upload folder is not writable'
-                ], 500);
-            }
-
-            // ✅ Save image
-            $image->save($path . '/' . $fileName);
-
-            $imagePath = 'images/profile/' . $fileName;
+            $imageUrl = $upload->getSecurePath();
         }
 
         $user->update([
             'name'          => $validated['name'],
             'email'         => $validated['email'],
             'phone'         => $validated['phone'],
-            'profile_image' => $imagePath
+            'profile_image' => $imageUrl
         ]);
-
-        $user->profile_image_url = $user->profile_image
-            ? asset($user->profile_image)
-            : null;
 
         return response()->json([
             'status'  => true,
