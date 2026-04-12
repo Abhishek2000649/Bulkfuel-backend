@@ -1,8 +1,0 @@
-[phases.setup]
-nixPkgs = ["php82", "gd"]
-
-[phases.install]
-cmds = [
-  "composer install --ignore-platform-reqs",
-  "npm ci"
-]
