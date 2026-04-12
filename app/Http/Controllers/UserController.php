@@ -313,93 +313,110 @@ class UserController extends Controller
         }
     }
 
-    public function updateBasic(Request $request)
-    {
-        try {
+  public function updateBasic(Request $request)
+{
+    try {
 
-            if (!Auth::guard('sanctum')->check()) {
-                return response()->json([
-                    'status'  => false,
-                    'message' => 'Unauthorized. Please login first.'
-                ], 401);
-            }
-
-            $user = Auth::user();
-
-            if (!$user) {
-                return response()->json([
-                    'status'  => false,
-                    'message' => 'User not found.'
-                ], 404);
-            }
-
-            // ✅ Validation
-            $validated = $request->validate([
-                'name'  => 'required|string|max:255',
-                'email' => 'required|email|unique:users,email,' . $user->id,
-                'phone' => 'required|digits:10|unique:users,phone,' . $user->id,
-                'image' => 'nullable|image|mimes:jpg,jpeg,png,webp|max:5120'
-            ]);
-
-            $imagePath = $user->profile_image;
-
-            if ($request->hasFile('image')) {
-
-                if ($user->profile_image && file_exists(public_path($user->profile_image))) {
-                    unlink(public_path($user->profile_image));
-                }
-
-                $file = $request->file('image');
-
-                $manager = new ImageManager(new Driver());
-                $image = $manager->read($file->getPathname());
-
-                $image->cover(200, 200);
-
-                $fileName = time() . '.jpg';
-                $path = public_path('images/profile');
-
-                if (!file_exists($path)) {
-                    mkdir($path, 0755, true);
-                }
-
-                $image->save($path . '/' . $fileName);
-
-                $imagePath = 'images/profile/' . $fileName;
-            }
-
-            $user->update([
-                'name'          => $validated['name'],
-                'email'         => $validated['email'],
-                'phone'         => $validated['phone'],
-                'profile_image' => $imagePath
-            ]);
-
-            $user->profile_image_url = $user->profile_image
-                ? asset($user->profile_image)
-                : null;
-
-            return response()->json([
-                'status'  => true,
-                'message' => 'Profile updated successfully.',
-                'data'    => $user
-            ], 200);
-        } catch (ValidationException $e) {
-
+        if (!Auth::guard('sanctum')->check()) {
             return response()->json([
                 'status'  => false,
-                'message' => 'Validation failed.',
-                'errors'  => $e->errors()
-            ], 422);
-        } catch (Exception $e) {
-
-            return response()->json([
-                'status'  => false,
-                'message' => 'Something went wrong.',
-                'error'   => $e->getMessage()
-            ], 500);
+                'message' => 'Unauthorized. Please login first.'
+            ], 401);
         }
+
+        $user = Auth::user();
+
+        if (!$user) {
+            return response()->json([
+                'status'  => false,
+                'message' => 'User not found.'
+            ], 404);
+        }
+
+        // Validation
+        $validated = $request->validate([
+            'name'  => 'required|string|max:255',
+            'email' => 'required|email|unique:users,email,' . $user->id,
+            'phone' => 'required|digits:10|unique:users,phone,' . $user->id,
+            'image' => 'nullable|image|mimes:jpg,jpeg,png,webp|max:5120'
+        ]);
+
+        $imagePath = $user->profile_image;
+
+        if ($request->hasFile('image')) {
+
+            // ✅ Safe delete old image
+            if ($user->profile_image) {
+                $oldPath = public_path($user->profile_image);
+                if (file_exists($oldPath)) {
+                    @unlink($oldPath); // safe
+                }
+            }
+
+            $file = $request->file('image');
+
+            $manager = new ImageManager(new Driver());
+            $image = $manager->read($file->getPathname());
+
+            $image->cover(200, 200);
+
+            $fileName = time() . '.jpg';
+            $path = public_path('images/profile');
+
+            // ✅ Safe mkdir
+            if (!file_exists($path)) {
+                @mkdir($path, 0777, true);
+            }
+
+            // ✅ Ensure writable
+            if (!is_writable($path)) {
+                return response()->json([
+                    'status' => false,
+                    'message' => 'Upload folder is not writable'
+                ], 500);
+            }
+
+            // ✅ Save image
+            $image->save($path . '/' . $fileName);
+
+            $imagePath = 'images/profile/' . $fileName;
+        }
+
+        $user->update([
+            'name'          => $validated['name'],
+            'email'         => $validated['email'],
+            'phone'         => $validated['phone'],
+            'profile_image' => $imagePath
+        ]);
+
+        $user->profile_image_url = $user->profile_image
+            ? asset($user->profile_image)
+            : null;
+
+        return response()->json([
+            'status'  => true,
+            'message' => 'Profile updated successfully.',
+            'data'    => $user
+        ], 200);
+
+    } catch (ValidationException $e) {
+
+        return response()->json([
+            'status'  => false,
+            'message' => 'Validation failed.',
+            'errors'  => $e->errors()
+        ], 422);
+
+    } catch (\Throwable $e) {
+
+        return response()->json([
+            'status'  => false,
+            'message' => 'Something went wrong.',
+            'error'   => $e->getMessage(),
+            'line'    => $e->getLine()
+        ], 500);
     }
+}
     public function updateAddress(Request $request)
     {
         try {
