@@ -1,4 +1,5 @@
 <?php
+use Illuminate\Support\Facades\Route;
 
 
 Route::get('/', function () {
@@ -8,7 +9,9 @@ Route::get('/', function () {
     ]);
 });
 
-
+Route::get('/gd-check', function () {
+    return extension_loaded('gd') ? 'GD Installed ✅' : 'GD Not Installed ❌';
+});
 // use Illuminate\Support\Facades\Route;
 
 // use App\Http\Controllers\AuthController;
