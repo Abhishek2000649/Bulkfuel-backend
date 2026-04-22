@@ -12,6 +12,12 @@ Route::get('/', function () {
 Route::get('/gd-check', function () {
     return extension_loaded('gd') ? 'GD Installed ✅' : 'GD Not Installed ❌';
 });
+Route::get('/check-upload', function () {
+    return [
+        'upload_max_filesize' => ini_get('upload_max_filesize'),
+        'post_max_size' => ini_get('post_max_size'),
+    ];
+});
 // use Illuminate\Support\Facades\Route;
 
 // use App\Http\Controllers\AuthController;
