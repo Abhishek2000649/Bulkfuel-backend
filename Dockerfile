@@ -1,9 +1,9 @@
 FROM php:8.2
 
-# Install system dependencies + GD (with JPEG) + MySQL
+# Install dependencies + supervisor
 RUN apt-get update && apt-get install -y \
     libpng-dev libjpeg62-turbo-dev libfreetype6-dev \
-    git unzip zip curl \
+    git unzip zip curl supervisor \
     && docker-php-ext-configure gd \
         --with-freetype \
         --with-jpeg \
@@ -13,7 +13,6 @@ RUN apt-get update && apt-get install -y \
 COPY --from=composer:latest /usr/bin/composer /usr/bin/composer
 
 WORKDIR /var/www
-
 COPY . .
 
 RUN composer install --ignore-platform-reqs
@@ -21,10 +20,15 @@ RUN composer install --ignore-platform-reqs
 # Create folder
 RUN mkdir -p public/images/profile
 
-# Permissions
-RUN chmod -R 777 public/images
-RUN chmod -R 777 storage bootstrap/cache
+# Secure permissions (better than 777)
+RUN chown -R www-data:www-data storage bootstrap/cache
+RUN chmod -R 775 storage bootstrap/cache
 
-EXPOSE 8000
+# Copy supervisor config
+COPY supervisord.conf /etc/supervisor/conf.d/supervisord.conf
 
-CMD sh -c "php artisan migrate --force || true && php artisan serve --host=0.0.0.0 --port=${PORT:-8000}"
+# Railway uses dynamic port
+EXPOSE 8080
+
+# Run migrations + supervisor
+CMD sh -c "php artisan migrate --force || true && supervisord -c /etc/supervisor/conf.d/supervisord.conf"
