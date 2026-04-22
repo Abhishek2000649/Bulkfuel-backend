@@ -225,10 +225,10 @@ class UserController extends Controller
 
                     $order->items->map(function ($item) {
 
-                        if ($item->product && $item->product->image) {
-                            $item->product->image_url = asset($item->product->image);
-                        } else {
-                            $item->product->image_url = null;
+                        if ($item->product) {
+                            $item->product->image_url = $item->product->image
+                                ? asset($item->product->image)
+                                : null;
                         }
 
                         return $item;
@@ -269,125 +269,143 @@ class UserController extends Controller
     }
 
 
-   public function profile()
-{
-    try {
+    public function profile()
+    {
+        try {
 
-        if (!Auth::check()) {
+            if (!Auth::check()) {
+                return response()->json([
+                    'status' => false,
+                    'message' => 'Unauthorized. Please login first.'
+                ], 401);
+            }
+
+            $user = Auth::user();
+
+            if (!$user) {
+                return response()->json([
+                    'status' => false,
+                    'message' => 'User not found.'
+                ], 404);
+            }
+
+            // relation load
+            $user->load('address');
+
+            // ✅ Cloudinary URL (Direct)
+            $user->profile_image_url = $user->profile_image ?? null;
+
+            return response()->json([
+                'status' => true,
+                'message' => 'Profile fetched successfully.',
+                'user' => $user
+            ], 200);
+        } catch (Exception $e) {
+
             return response()->json([
                 'status' => false,
-                'message' => 'Unauthorized. Please login first.'
-            ], 401);
+                'message' => 'Something went wrong.',
+                'error' => $e->getMessage()
+            ], 500);
         }
-
-        $user = Auth::user();
-
-        if (!$user) {
-            return response()->json([
-                'status' => false,
-                'message' => 'User not found.'
-            ], 404);
-        }
-
-        // relation load
-        $user->load('address');
-
-        // ✅ Cloudinary URL (Direct)
-        $user->profile_image_url = $user->profile_image ?? null;
-
-        return response()->json([
-            'status' => true,
-            'message' => 'Profile fetched successfully.',
-            'user' => $user
-        ], 200);
-
-    } catch (Exception $e) {
-
-        return response()->json([
-            'status' => false,
-            'message' => 'Something went wrong.',
-            'error' => $e->getMessage()
-        ], 500);
     }
-}
 
 
-public function updateBasic(Request $request)
-{
-    try {
-        if (!Auth::guard('sanctum')->check()) {
-            return response()->json([
-                'status'  => false,
-                'message' => 'Unauthorized. Please login first.'
-            ], 401);
-        }
+    public function updateBasic(Request $request)
+    {
+        // return response()->json(['check'=> config('cloudinary'),
+        // 'file'=> $request->file('image')->getPathname()]);
+        try {
+            if (!Auth::guard('sanctum')->check()) {
+                return response()->json([
+                    'status'  => false,
+                    'message' => 'Unauthorized. Please login first.'
+                ], 401);
+            }
 
-        $user = Auth::user();
+            $user = Auth::guard('sanctum')->user();
+            if (!$user) {
+                return response()->json([
+                    'status'  => false,
+                    'message' => 'User not found.'
+                ], 404);
+            }
 
-        if (!$user) {
-            return response()->json([
-                'status'  => false,
-                'message' => 'User not found.'
-            ], 404);
-        }
+            // Validation
+            $validated = $request->validate([
+                'name'  => 'required|string|max:255',
+                'email' => 'required|email|unique:users,email,' . $user->id,
+                'phone' => 'required|digits:10|unique:users,phone,' . $user->id,
+                'image' => 'nullable|image|mimes:jpg,jpeg,png,webp|max:5120'
 
-        // Validation
-        $validated = $request->validate([
-            'name'  => 'required|string|max:255',
-            'email' => 'required|email|unique:users,email,' . $user->id,
-            'phone' => 'required|digits:10|unique:users,phone,' . $user->id,
-            'image' => 'nullable|image|mimes:jpg,jpeg,png,webp|max:5120'
-        ]);
-
-        $imageUrl = $user->profile_image;
-
-        if ($request->hasFile('image')) {
-
-            $file = $request->file('image');
-
-            $upload = Cloudinary::upload($file->getRealPath(), [
-                'folder' => 'profile_images',
-                'transformation' => [
-                    'width' => 200,
-                    'height' => 200,
-                    'crop' => 'fill'
-                ]
             ]);
 
-            $imageUrl = $upload->getSecurePath();
-        }
+            // $imageUrl = $user->profile_image;
+            if ($request->hasFile('image')) {
 
-        $user->update([
-            'name'          => $validated['name'],
-            'email'         => $validated['email'],
-            'phone'         => $validated['phone'],
-            'profile_image' => $imageUrl
+    $file = $request->file('image');
+
+    if ($file->isValid()) {
+
+        $upload = Cloudinary::upload($file->getPathname(), [
+            'folder' => 'profile_images'
         ]);
 
-        return response()->json([
-            'status'  => true,
-            'message' => 'Profile updated successfully.',
-            'data'    => $user
-        ], 200);
-
-    } catch (ValidationException $e) {
-
-        return response()->json([
-            'status'  => false,
-            'message' => 'Validation failed.',
-            'errors'  => $e->errors()
-        ], 422);
-
-    } catch (\Throwable $e) {
-
-        return response()->json([
-            'status'  => false,
-            'message' => 'Something went wrong.',
-            'error'   => $e->getMessage(),
-            'line'    => $e->getLine()
-        ], 500);
+        $imageUrl = $upload->getSecurePath();
     }
 }
+            // if ($request->file('image')) {
+
+            //     $file = $request->file('image');
+
+            //     $manager = new ImageManager(new Driver());
+
+            //     $image = $manager->read($file->getPathname());
+
+            //     $image->cover(256, 160);
+
+            //     $fileName = time() . '.jpg';
+
+            //     $path = public_path('images');
+
+            //     if (!file_exists($path)) {
+            //         mkdir($path, 0755, true);
+            //     }
+
+            //     $image->save($path . '/' . $fileName);
+
+            //     $validated['image'] = 'images/' . $fileName;
+            // }
+
+            $user->update([
+                'name' => $validated['name'] ?? $user->name,
+                'email' => $validated['email'] ?? $user->email,
+                'phone' => $validated['phone'] ?? $user->phone,
+                'profile_image' => "abc"
+            ]);
+
+            return response()->json([
+                'status'  => true,
+                'message' => 'Profile updated successfully.',
+                'data'    => $user
+            ], 200);
+        } catch (ValidationException $e) {
+
+            return response()->json([
+                'status'  => false,
+                'message' => 'Validation failed.',
+                'errors'  => $e->errors()
+            ], 422);
+        } catch (\Throwable $e) {
+
+            return response()->json([
+                'status'  => false,
+                'message' => 'Something went wrong.',
+                'error'   => $e->getMessage(),
+                'line'    => $e->getLine()
+            ], 500);
+        }
+    }
     public function updateAddress(Request $request)
     {
         try {

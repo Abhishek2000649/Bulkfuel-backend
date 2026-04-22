@@ -2,6 +2,7 @@
 
 namespace App\Http\Controllers;
 
+use App\Events\MessageSeen;
 use App\Events\MessageSent;
 use Illuminate\Http\Request;
 use App\Models\Conversation;
@@ -93,9 +94,6 @@ class ChatController extends Controller
                     'message' => 'You are not allowed to send message in this conversation'
                 ], 403);
             }
-
-
-
             $message = Message::create([
                 'conversation_id' => $conversation->id,
                 'sender_id' => $user->id,
@@ -105,7 +103,7 @@ class ChatController extends Controller
                 'type' => $request->file ? 'file' : 'text',
                 'is_seen' => false
             ]);
-                broadcast(new MessageSent($message))->toOthers();
+            broadcast(new MessageSent($message))->toOthers();
             $conversation->update([
                 'last_message' => $request->message ?? 'File',
                 'last_message_at' => now()
@@ -240,6 +238,7 @@ class ChatController extends Controller
             Message::where('conversation_id', $conversation->id)
                 ->where('sender_id', '!=', $user->id)
                 ->update(['is_seen' => true]);
+            broadcast(new MessageSeen($conversationId, $user->id));
 
             return response()->json([
                 'success' => true,
