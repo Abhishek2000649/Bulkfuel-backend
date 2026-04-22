@@ -251,7 +251,7 @@ class AdminController extends Controller
             'description'   => 'required|string',
             'category_id'   => 'required|exists:categories,id',
             'payment_type'  => 'required|in:cash,online,both',
-            'image'         => 'sometimes|image|mimes:jpg,jpeg,png,webp|max:5120'
+            'image'         => 'nullable|image|mimes:jpg,jpeg,png,webp|max:5120'
         ]);
 
         // ✅ Find Product
@@ -269,9 +269,6 @@ class AdminController extends Controller
         $categoryFolder = preg_replace('/\s+/', '_', trim($category->name)) . '_images';
         $newFolderPath = "products_images/" . $categoryFolder;
 
-        // =====================================================
-        // 🖼️ CASE 1: New Image Upload
-        // =====================================================
         if ($request->hasFile('image')) {
 
             // ❌ Delete old image (SAFE METHOD)
