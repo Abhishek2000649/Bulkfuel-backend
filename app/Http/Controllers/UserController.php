@@ -295,7 +295,7 @@ class UserController extends Controller
             $user->load('address');
 
             // ✅ Cloudinary URL (Direct)
-            $user->profile_image_url = $user->profile_image ?? null;
+            $user->profile_image = $user->profile_image ?? null;
 
             return response()->json([
                 'status' => true,
