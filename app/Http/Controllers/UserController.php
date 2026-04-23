@@ -19,6 +19,8 @@ use Exception;
 use Intervention\Image\Drivers\Gd\Driver;
 use Intervention\Image\ImageManager;
 use CloudinaryLabs\CloudinaryLaravel\Facades\Cloudinary;
+use Cloudinary\Api\Upload\UploadApi;
+use Illuminate\Support\Str;
 
 class UserController extends Controller
 {
@@ -299,7 +301,7 @@ class UserController extends Controller
                 'status' => true,
                 'message' => 'Profile fetched successfully.',
                 'user' => $user
-            ], 200);
+            ], 200,  [], JSON_UNESCAPED_SLASHES);
         } catch (Exception $e) {
 
             return response()->json([
@@ -311,101 +313,128 @@ class UserController extends Controller
     }
 
 
-    public function updateBasic(Request $request)
-    {
-        // return response()->json(['check'=> config('cloudinary'),
-        // 'file'=> $request->file('image')->getPathname()]);
-        try {
-            if (!Auth::guard('sanctum')->check()) {
-                return response()->json([
-                    'status'  => false,
-                    'message' => 'Unauthorized. Please login first.'
-                ], 401);
-            }
+   public function updateBasic(Request $request)
+{
+    try {
 
-            $user = Auth::guard('sanctum')->user();
-            if (!$user) {
-                return response()->json([
-                    'status'  => false,
-                    'message' => 'User not found.'
-                ], 404);
-            }
+        // 🔐 AUTH CHECK
+        if (!Auth::guard('sanctum')->check()) {
+            return response()->json([
+                'status'  => false,
+                'message' => 'Unauthorized. Please login first.'
+            ], 401);
+        }
 
-            // Validation
-            $validated = $request->validate([
-                'name'  => 'required|string|max:255',
-                'email' => 'required|email|unique:users,email,' . $user->id,
-                'phone' => 'required|digits:10|unique:users,phone,' . $user->id,
-                'image' => 'nullable|image|mimes:jpg,jpeg,png,webp|max:5120'
+        $user = Auth::guard('sanctum')->user();
 
-            ]);
+        if (!$user) {
+            return response()->json([
+                'status'  => false,
+                'message' => 'User not found.'
+            ], 404);
+        }
 
-            // $imageUrl = $user->profile_image;
-            if ($request->hasFile('image')) {
-
-    $file = $request->file('image');
-
-    if ($file->isValid()) {
-
-        $upload = Cloudinary::upload($file->getPathname(), [
-            'folder' => 'profile_images'
+        // ✅ VALIDATION
+        $validated = $request->validate([
+            'name'  => 'required|string|max:255',
+            'email' => 'required|email|unique:users,email,' . $user->id,
+            'phone' => 'required|digits:10|unique:users,phone,' . $user->id,
+            'image' => 'nullable|image|mimes:jpg,jpeg,png,webp|max:5120'
         ]);
 
-        $imageUrl = $upload->getSecurePath();
+        $imageUrl = $user->profile_image;
+        if ($request->hasFile('image')) {
+
+            $file = $request->file('image');
+
+            if ($file->isValid()) {
+
+                $folder = "profile_images";
+
+                // ✅ Upload FIRST (safe approach)
+                $upload = (new \Cloudinary\Api\Upload\UploadApi())->upload(
+                    $file->getRealPath(),
+                    [
+                        'folder' => $folder,
+                        'transformation' => [
+                            'width' => 300,
+                            'height' => 300,
+                            'crop' => 'fill',
+                            'quality' => 'auto'
+                        ]
+                    ]
+                );
+
+                $imageUrl = $upload['secure_url'];
+
+                // ❌ Delete OLD image (after success)
+                if ($user->profile_image) {
+                    $this->deleteFromCloudinary($user->profile_image);
+                }
+            }
+        }
+
+        // =====================================================
+        // 💾 UPDATE USER
+        // =====================================================
+        $user->update([
+            'name'          => $validated['name'],
+            'email'         => $validated['email'],
+            'phone'         => $validated['phone'],
+            'profile_image' => $imageUrl
+        ]);
+
+        return response()->json([
+            'status'  => true,
+            'message' => 'Profile updated successfully.',
+            'data'    => $user
+        ], 200,  [], JSON_UNESCAPED_SLASHES);
+
+    } catch (\Illuminate\Validation\ValidationException $e) {
+
+        return response()->json([
+            'status'  => false,
+            'message' => 'Validation failed.',
+            'errors'  => $e->errors()
+        ], 422);
+
+    } catch (\Throwable $e) {
+
+        return response()->json([
+            'status'  => false,
+            'message' => 'Something went wrong.',
+            'error'   => $e->getMessage(),
+            'line'    => $e->getLine()
+        ], 500);
     }
 }
-            // if ($request->file('image')) {
+   private function deleteFromCloudinary($url)
+{
+    try {
 
-            //     $file = $request->file('image');
+        if (!$url) return;
 
-            //     $manager = new ImageManager(new Driver());
+        // ✅ Extract path from URL
+        $path = parse_url($url, PHP_URL_PATH);
 
-            //     $image = $manager->read($file->getPathname());
+        // remove `/image/upload/` or similar
+        $path = preg_replace('/^\/.*\/upload\//', '', $path);
 
-            //     $image->cover(256, 160);
+        // remove version (v12345/)
+        $path = preg_replace('/^v\d+\//', '', $path);
 
-            //     $fileName = time() . '.jpg';
+        // remove extension
+        $publicId = pathinfo($path, PATHINFO_DIRNAME) . '/' . pathinfo($path, PATHINFO_FILENAME);
 
-            //     $path = public_path('images');
+        // ✅ Delete from Cloudinary
+        (new \Cloudinary\Api\Upload\UploadApi())->destroy($publicId, [
+            'resource_type' => 'image'
+        ]);
 
-            //     if (!file_exists($path)) {
-            //         mkdir($path, 0755, true);
-            //     }
-
-            //     $image->save($path . '/' . $fileName);
-
-            //     $validated['image'] = 'images/' . $fileName;
-            // }
-
-            $user->update([
-                'name' => $validated['name'] ?? $user->name,
-                'email' => $validated['email'] ?? $user->email,
-                'phone' => $validated['phone'] ?? $user->phone,
-                'profile_image' => "abc"
-            ]);
-
-            return response()->json([
-                'status'  => true,
-                'message' => 'Profile updated successfully.',
-                'data'    => $user
-            ], 200);
-        } catch (ValidationException $e) {
-
-            return response()->json([
-                'status'  => false,
-                'message' => 'Validation failed.',
-                'errors'  => $e->errors()
-            ], 422);
-        } catch (\Throwable $e) {
-
-            return response()->json([
-                'status'  => false,
-                'message' => 'Something went wrong.',
-                'error'   => $e->getMessage(),
-                'line'    => $e->getLine()
-            ], 500);
-        }
+    } catch (\Exception $e) {
+        // optional: \Log::error($e->getMessage());
     }
+}
     public function updateAddress(Request $request)
     {
         try {
