@@ -7,12 +7,30 @@ use Illuminate\Database\Eloquent\Model;
 class Address extends Model
 {
     protected $fillable = [
-        'user_id',
-        'address',
-        'city',
-        'state',
-        'pincode'
-    ];
+    'user_id',
+
+    'phone_number',
+    'alternate_phone',
+
+    'address',
+
+    'house_no',
+    'building_name',
+    'street',
+    'area',
+    'landmark',
+
+    'city',
+    'state',
+    'pincode',
+
+    'latitude',
+    'longitude',
+
+    'delivery_instructions',
+
+    'is_current'
+];
 
     /* ================= RELATIONSHIP ================= */
 

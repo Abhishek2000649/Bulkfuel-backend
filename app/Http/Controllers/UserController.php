@@ -313,128 +313,125 @@ class UserController extends Controller
     }
 
 
-   public function updateBasic(Request $request)
-{
-    try {
+    public function updateBasic(Request $request)
+    {
+        try {
 
-        // 🔐 AUTH CHECK
-        if (!Auth::guard('sanctum')->check()) {
-            return response()->json([
-                'status'  => false,
-                'message' => 'Unauthorized. Please login first.'
-            ], 401);
-        }
+            // 🔐 AUTH CHECK
+            if (!Auth::guard('sanctum')->check()) {
+                return response()->json([
+                    'status'  => false,
+                    'message' => 'Unauthorized. Please login first.'
+                ], 401);
+            }
 
-        $user = Auth::guard('sanctum')->user();
+            $user = Auth::guard('sanctum')->user();
 
-        if (!$user) {
-            return response()->json([
-                'status'  => false,
-                'message' => 'User not found.'
-            ], 404);
-        }
+            if (!$user) {
+                return response()->json([
+                    'status'  => false,
+                    'message' => 'User not found.'
+                ], 404);
+            }
 
-        // ✅ VALIDATION
-        $validated = $request->validate([
-            'name'  => 'required|string|max:255',
-            'email' => 'required|email|unique:users,email,' . $user->id,
-            'phone' => 'required|digits:10|unique:users,phone,' . $user->id,
-            'image' => 'nullable|image|mimes:jpg,jpeg,png,webp|max:5120'
-        ]);
+            // ✅ VALIDATION
+            $validated = $request->validate([
+                'name'  => 'required|string|max:255',
+                'email' => 'required|email|unique:users,email,' . $user->id,
+                'phone' => 'required|digits:10|unique:users,phone,' . $user->id,
+                'image' => 'nullable|image|mimes:jpg,jpeg,png,webp|max:5120'
+            ]);
 
-        $imageUrl = $user->profile_image;
-        if ($request->hasFile('image')) {
+            $imageUrl = $user->profile_image;
+            if ($request->hasFile('image')) {
 
-            $file = $request->file('image');
+                $file = $request->file('image');
 
-            if ($file->isValid()) {
+                if ($file->isValid()) {
 
-                $folder = "profile_images";
+                    $folder = "profile_images";
 
-                // ✅ Upload FIRST (safe approach)
-                $upload = (new \Cloudinary\Api\Upload\UploadApi())->upload(
-                    $file->getRealPath(),
-                    [
-                        'folder' => $folder,
-                        'transformation' => [
-                            'width' => 300,
-                            'height' => 300,
-                            'crop' => 'fill',
-                            'quality' => 'auto'
+                    // ✅ Upload FIRST (safe approach)
+                    $upload = (new \Cloudinary\Api\Upload\UploadApi())->upload(
+                        $file->getRealPath(),
+                        [
+                            'folder' => $folder,
+                            'transformation' => [
+                                'width' => 300,
+                                'height' => 300,
+                                'crop' => 'fill',
+                                'quality' => 'auto'
+                            ]
                         ]
-                    ]
-                );
+                    );
 
-                $imageUrl = $upload['secure_url'];
+                    $imageUrl = $upload['secure_url'];
 
-                // ❌ Delete OLD image (after success)
-                if ($user->profile_image) {
-                    $this->deleteFromCloudinary($user->profile_image);
+                    // ❌ Delete OLD image (after success)
+                    if ($user->profile_image) {
+                        $this->deleteFromCloudinary($user->profile_image);
+                    }
                 }
             }
+
+            // =====================================================
+            // 💾 UPDATE USER
+            // =====================================================
+            $user->update([
+                'name'          => $validated['name'],
+                'email'         => $validated['email'],
+                'phone'         => $validated['phone'],
+                'profile_image' => $imageUrl
+            ]);
+
+            return response()->json([
+                'status'  => true,
+                'message' => 'Profile updated successfully.',
+                'data'    => $user
+            ], 200,  [], JSON_UNESCAPED_SLASHES);
+        } catch (\Illuminate\Validation\ValidationException $e) {
+
+            return response()->json([
+                'status'  => false,
+                'message' => 'Validation failed.',
+                'errors'  => $e->errors()
+            ], 422);
+        } catch (\Throwable $e) {
+
+            return response()->json([
+                'status'  => false,
+                'message' => 'Something went wrong.',
+                'error'   => $e->getMessage(),
+                'line'    => $e->getLine()
+            ], 500);
         }
-
-        // =====================================================
-        // 💾 UPDATE USER
-        // =====================================================
-        $user->update([
-            'name'          => $validated['name'],
-            'email'         => $validated['email'],
-            'phone'         => $validated['phone'],
-            'profile_image' => $imageUrl
-        ]);
-
-        return response()->json([
-            'status'  => true,
-            'message' => 'Profile updated successfully.',
-            'data'    => $user
-        ], 200,  [], JSON_UNESCAPED_SLASHES);
-
-    } catch (\Illuminate\Validation\ValidationException $e) {
-
-        return response()->json([
-            'status'  => false,
-            'message' => 'Validation failed.',
-            'errors'  => $e->errors()
-        ], 422);
-
-    } catch (\Throwable $e) {
-
-        return response()->json([
-            'status'  => false,
-            'message' => 'Something went wrong.',
-            'error'   => $e->getMessage(),
-            'line'    => $e->getLine()
-        ], 500);
     }
-}
-   private function deleteFromCloudinary($url)
-{
-    try {
+    private function deleteFromCloudinary($url)
+    {
+        try {
 
-        if (!$url) return;
+            if (!$url) return;
 
-        // ✅ Extract path from URL
-        $path = parse_url($url, PHP_URL_PATH);
+            // ✅ Extract path from URL
+            $path = parse_url($url, PHP_URL_PATH);
 
-        // remove `/image/upload/` or similar
-        $path = preg_replace('/^\/.*\/upload\//', '', $path);
+            // remove `/image/upload/` or similar
+            $path = preg_replace('/^\/.*\/upload\//', '', $path);
 
-        // remove version (v12345/)
-        $path = preg_replace('/^v\d+\//', '', $path);
+            // remove version (v12345/)
+            $path = preg_replace('/^v\d+\//', '', $path);
 
-        // remove extension
-        $publicId = pathinfo($path, PATHINFO_DIRNAME) . '/' . pathinfo($path, PATHINFO_FILENAME);
+            // remove extension
+            $publicId = pathinfo($path, PATHINFO_DIRNAME) . '/' . pathinfo($path, PATHINFO_FILENAME);
 
-        // ✅ Delete from Cloudinary
-        (new \Cloudinary\Api\Upload\UploadApi())->destroy($publicId, [
-            'resource_type' => 'image'
-        ]);
-
-    } catch (\Exception $e) {
-        // optional: \Log::error($e->getMessage());
+            // ✅ Delete from Cloudinary
+            (new \Cloudinary\Api\Upload\UploadApi())->destroy($publicId, [
+                'resource_type' => 'image'
+            ]);
+        } catch (\Exception $e) {
+            // optional: \Log::error($e->getMessage());
+        }
     }
-}
     public function updateAddress(Request $request)
     {
         try {
@@ -458,21 +455,57 @@ class UserController extends Controller
 
             // 2️⃣ Validate Request
             $validated = $request->validate([
+                'phone_number' => 'required|digits:10',
+                'alternate_phone' => 'nullable|digits:10',
+
                 'address' => 'required|string',
-                'city'    => 'required|string',
-                'state'   => 'required|string',
-                'pincode' => 'required|string',
+
+                'house_no' => 'required|string',
+                'building_name' => 'nullable|string',
+                'street' => 'nullable|string',
+                'area' => 'required|string',
+                'landmark' => 'nullable|string',
+
+                'city' => 'required|string',
+                'state' => 'required|string',
+                'pincode' => 'required|digits:6',
+
+                'latitude' => 'nullable|numeric',
+                'longitude' => 'nullable|numeric',
+
+                'delivery_instructions' => 'nullable|string',
             ]);
 
-            // 3️⃣ Create or Update Address
-            $address = Address::updateOrCreate(
-                ['user_id' => $user->id],
-                $validated
-            );
+
+            $address = Address::create([
+                'user_id' => $user->id,
+
+                'phone_number' => $validated['phone_number'],
+                'alternate_phone' => $validated['alternate_phone'] ?? null,
+
+                'address' => $validated['address'],
+
+                'house_no' => $validated['house_no'],
+                'building_name' => $validated['building_name'] ?? null,
+                'street' => $validated['street'] ?? null,
+                'area' => $validated['area'],
+                'landmark' => $validated['landmark'] ?? null,
+
+                'city' => $validated['city'],
+                'state' => $validated['state'],
+                'pincode' => $validated['pincode'],
+
+                'latitude' => $validated['latitude'] ?? null,
+                'longitude' => $validated['longitude'] ?? null,
+
+                'delivery_instructions' => $validated['delivery_instructions'] ?? null,
+
+                'is_current' => 0
+            ]);
 
             return response()->json([
                 'status'  => true,
-                'message' => 'Address updated successfully.',
+                'message' => 'Address Added successfully.',
                 'data'    => $address,
             ], 200);
         } catch (ValidationException $e) {
@@ -508,6 +541,35 @@ class UserController extends Controller
             ], 500);
         }
     }
+    public function getAddresses()
+{
+    $user = Auth::user();
+
+    $addresses = Address::where('user_id', $user->id)->get();
+
+    return response()->json([
+        'status' => true,
+        'data' => $addresses
+    ]);
+}
+    public function setCurrentAddress($id)
+{
+    $user = Auth::user();
+
+    // reset old
+    Address::where('user_id', $user->id)
+        ->update(['is_current' => 0]);
+
+    // set new
+    Address::where('id', $id)
+        ->where('user_id', $user->id)
+        ->update(['is_current' => 1]);
+
+    return response()->json([
+        'status' => true,
+        'message' => 'Current address updated'
+    ]);
+}
     public function updatePassword(Request $request)
     {
         try {
@@ -582,4 +644,64 @@ class UserController extends Controller
             ], 500);
         }
     }
+
+
+ public function deleteAddress($id)
+{
+    try {
+
+        if (!Auth::guard('sanctum')->check()) {
+            return response()->json([
+                'status'  => false,
+                'message' => 'Unauthorized. Please login first.'
+            ], 401);
+        }
+
+        $user = Auth::user();
+
+      
+        $address = Address::where('id', $id)
+            ->where('user_id', $user->id)
+            ->first();
+
+        if (!$address) {
+            return response()->json([
+                'status'  => false,
+                'message' => 'Address not found.'
+            ], 404);
+        }
+
+      
+       
+        $isCurrent = $address->is_current;
+
+   
+        $address->delete();
+
+       
+        if ($isCurrent) {
+            Address::where('user_id', $user->id)
+                ->update(['is_current' => 0]);
+        }
+
+        return response()->json([
+            'status'  => true,
+            'message' => 'Address deleted successfully.'
+        ], 200);
+
+    } catch (QueryException $e) {
+
+        return response()->json([
+            'status'  => false,
+            'message' => 'Database error occurred.'
+        ], 500);
+
+    } catch (Exception $e) {
+
+        return response()->json([
+            'status'  => false,
+            'message' => 'Something went wrong.'
+        ], 500);
+    }
+}
 }

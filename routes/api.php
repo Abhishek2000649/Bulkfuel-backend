@@ -37,6 +37,9 @@ Route::middleware('auth:sanctum')->group(function () {
     Route::post('/profile/basic', [UserController::class, 'updateBasic']);
     Route::post('/profile/address', [UserController::class, 'updateAddress']);
     Route::post('/profile/password', [UserController::class, 'updatePassword']);
+     Route::get('/profile/addresses', [UserController::class, 'getAddresses']);
+      Route::post('/profile/address/set-current/{id}', [UserController::class, 'setCurrentAddress']);
+      Route::delete('/profile/address/{id}', [UserController::class, 'deleteAddress']);
 });
 
 // Route::middleware(['auth:sanctum'])->get('user/', [UserController::class, 'home'])

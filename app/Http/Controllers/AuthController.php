@@ -359,7 +359,9 @@ class AuthController extends Controller
     // }
     public function me(Request $request)
 {
-    $user = $request->user()->load('address');
+    $user = $request->user()->load(['address' => function ($query) {
+        $query->where('is_current', 1);
+    }]);
 
     // 🔥 Add full image URL
     if ($user->profile_image) {
