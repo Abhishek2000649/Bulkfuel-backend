@@ -5,6 +5,7 @@ namespace App\Http\Controllers;
 use App\Models\Address;
 use App\Models\Cart;
 use App\Models\Order;
+use App\Models\orderAddress;
 use App\Models\OrderWarehouse;
 use App\Models\User;
 use App\Models\WarehouseProduct;
@@ -118,64 +119,53 @@ class OrderController extends Controller
     public function placeOrder(Request $request)
     {
         try {
-
-
-
             $validated = $request->validate([
-                'address'        => 'required|string',
-                'city'           => 'required|string',
-                'phone'          => 'required|string',
-                'state'          => 'required|string',
-                'pincode'        => 'required|string',
-                'payment_method' => 'required|string',
+                'address_id'     => 'required|exists:addresses,id',
+                'payment_method' => 'required|in:online,cash',
                 'cart_ids'       => 'required|array|min:1',
                 'cart_ids.*'     => 'integer|exists:carts,id'
             ]);
 
+            $userId = Auth::id();
 
-
-            $cartIds = $validated['cart_ids'];
-
-
+            // ✅ 2. Get Cart Items
             $cartItems = Cart::with('product')
-                ->where('user_id', Auth::id())
-                ->whereIn('id', $cartIds)
+                ->where('user_id', $userId)
+                ->whereIn('id', $validated['cart_ids'])
                 ->get();
 
             if ($cartItems->isEmpty()) {
                 return response()->json([
-                    'status'  => false,
+                    'status' => false,
                     'message' => 'Cart is empty'
                 ], 400);
             }
 
-
+            // ✅ 3. Validate Products
             foreach ($cartItems as $item) {
                 if (!$item->product) {
                     return response()->json([
-                        'status'  => false,
+                        'status' => false,
                         'message' => 'Product not found in cart'
                     ], 404);
                 }
             }
 
+            // ✅ 4. Calculate Total
             $totalAmount = $cartItems->sum(
-                fn($item) =>
-                $item->product->price * $item->quantity
+                fn($item) => $item->product->price * $item->quantity
             );
 
-
+            // ✅ 5. Warehouse Allocation
             $itemWarehouseMap = [];
 
             foreach ($cartItems as $item) {
 
-                $warehouseStocks = WarehouseProduct::where('product_id', $item->product_id)
-                    ->orderBy('warehouse_id')
-                    ->get();
+                $stocks = WarehouseProduct::where('product_id', $item->product_id)->get();
 
                 $selectedWarehouse = null;
 
-                foreach ($warehouseStocks as $stock) {
+                foreach ($stocks as $stock) {
                     if ($stock->stock_quantity >= $item->quantity) {
                         $selectedWarehouse = $stock->warehouse_id;
                         break;
@@ -184,74 +174,74 @@ class OrderController extends Controller
 
                 if (!$selectedWarehouse) {
                     return response()->json([
-                        'status'  => false,
+                        'status' => false,
                         'message' => "Product '{$item->product->name}' is out of stock"
                     ], 400);
                 }
 
                 $itemWarehouseMap[$item->id] = $selectedWarehouse;
             }
-            $userId = Auth::id();
-            $phone  = $request->phone;
 
-            $phoneExists = User::where('phone', $phone)
-                ->where('id', '!=', $userId)
-                ->exists();
+            // ✅ 6. Get Address (IMPORTANT)
+            $address = Address::where('id', $validated['address_id'])
+                ->where('user_id', $userId)
+                ->first();
 
-            if ($phoneExists) {
+            if (!$address) {
                 return response()->json([
-                    'status'  => false,
-                    'message' => 'Phone number already used by another user'
-                ], 400);
+                    'status' => false,
+                    'message' => 'Address not found'
+                ], 404);
             }
 
             DB::transaction(function () use (
                 $validated,
                 $cartItems,
-                $cartIds,
                 $itemWarehouseMap,
-                $totalAmount
+                $totalAmount,
+                $userId,
+                $address
             ) {
 
-                $userId = Auth::id();
+               
+                $orderAddress = orderAddress::create([
+                    'user_address_id' => $address->id,
 
-                // Sync Address
-                $address = Address::where('user_id', $userId)->first();
+                    'phone_number'    => $address->phone_number,
+                    'alternate_phone' => $address->alternate_phone,
 
-                if ($address) {
-                    $address->update([
-                        'address' => $validated['address'],
-                        'city'    => $validated['city'],
-                        'state'   => $validated['state'],
-                        'pincode' => $validated['pincode'],
-                    ]);
-                } else {
-                    Address::create([
-                        'user_id' => $userId,
-                        'address' => $validated['address'],
-                        'city'    => $validated['city'],
-                        'state'   => $validated['state'],
-                        'pincode' => $validated['pincode'],
-                    ]);
-                }
-                Auth::user()->update([
-                    'phone' => $validated['phone']
+                    'address'        => $address->address,
+
+                    'house_no'       => $address->house_no,
+                    'building_name'  => $address->building_name,
+                    'street'         => $address->street,
+                    'area'           => $address->area,
+                    'landmark'       => $address->landmark,
+
+                    'city'           => $address->city,
+                    'state'          => $address->state,
+                    'pincode'        => $address->pincode,
+
+                    'latitude'       => $address->latitude,
+                    'longitude'      => $address->longitude,
+
+                    'delivery_instructions' => $address->delivery_instructions,
+
+                    
                 ]);
 
-                // Create Order
+                // 🔥 7.2 Create Order
                 $order = Order::create([
-                    'user_id'       => $userId,
-                    'total_amount'  => $totalAmount,
-                    'status'        => 'CONFIRMED',
-                    'address'       => $validated['address'],
-                    'city'          => $validated['city'],
-                    'state'         => $validated['state'],
-                    'pincode'       => $validated['pincode'],
-                    'payment_method' => $validated['payment_method'],
+                    'user_id'          => $userId,
+                    'total_amount'     => $totalAmount,
+                    'status'           => 'CONFIRMED',
+                    'payment_method'   => $validated['payment_method'],
+                    'order_address_id' => $orderAddress->id,
                 ]);
 
                 $usedWarehouses = [];
 
+                // 🔥 7.3 Create Order Items + Deduct Stock
                 foreach ($cartItems as $item) {
 
                     $warehouseId = $itemWarehouseMap[$item->id];
@@ -269,6 +259,7 @@ class OrderController extends Controller
                         ->decrement('stock_quantity', $item->quantity);
                 }
 
+                // 🔥 7.4 Save Order Warehouses
                 foreach (array_unique($usedWarehouses) as $wid) {
                     OrderWarehouse::create([
                         'order_id'     => $order->id,
@@ -276,9 +267,11 @@ class OrderController extends Controller
                     ]);
                 }
 
-                Cart::whereIn('id', $cartIds)->delete();
+                // 🔥 7.5 Clear Cart
+                Cart::whereIn('id', $validated['cart_ids'])->delete();
             });
 
+            // ✅ 8. Success Response
             return response()->json([
                 'status'  => true,
                 'message' => 'Order placed successfully'
@@ -290,29 +283,11 @@ class OrderController extends Controller
                 'message' => 'Validation failed',
                 'errors'  => $e->errors()
             ], 422);
-        } catch (AuthenticationException $e) {
-
-            return response()->json([
-                'status'  => false,
-                'message' => 'Authentication failed'
-            ], 401);
-        } catch (ModelNotFoundException $e) {
-
-            return response()->json([
-                'status'  => false,
-                'message' => 'Resource not found'
-            ], 404);
-        } catch (QueryException $e) {
-
-            return response()->json([
-                'status'  => false,
-                'message' => 'Database error occurred'
-            ], 500);
         } catch (Exception $e) {
 
             return response()->json([
                 'status'  => false,
-                'message' => 'Something went wrong'
+                'message' => $e->getMessage() // 🔥 helpful for debug
             ], 500);
         }
     }

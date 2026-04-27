@@ -208,8 +208,6 @@ class UserController extends Controller
     public function orders()
     {
         try {
-
-            // 1️⃣ Check Authentication (Sanctum Protected Route)
             if (!Auth::check()) {
                 return response()->json([
                     'status'  => false,
@@ -217,20 +215,23 @@ class UserController extends Controller
                 ], 401);
             }
 
+
             $orders = Order::where('user_id', Auth::id())
-                ->with(['items.product' => function ($query) {
-                    $query->select('id', 'name', 'price', 'image', 'category_id');
-                }], 'delivery')
+                ->with([
+                    'items.product' => function ($query) {
+                        $query->select('id', 'name', 'price', 'image', 'category_id');
+                    },
+                    'delivery',
+                    'orderAddress'
+                ])
                 ->latest()
                 ->get()
                 ->map(function ($order) {
 
-                    $order->items->map(function ($item) {
+                    $order->items = $order->items->map(function ($item) {
 
-                        if ($item->product) {
-                            $item->product->image_url = $item->product->image
-                                ? asset($item->product->image)
-                                : null;
+                        if ($item->product && $item->product->image) {
+                            $item->product->image_url = asset($item->product->image);
                         }
 
                         return $item;
@@ -542,34 +543,34 @@ class UserController extends Controller
         }
     }
     public function getAddresses()
-{
-    $user = Auth::user();
+    {
+        $user = Auth::user();
 
-    $addresses = Address::where('user_id', $user->id)->get();
+        $addresses = Address::where('user_id', $user->id)->get();
 
-    return response()->json([
-        'status' => true,
-        'data' => $addresses
-    ]);
-}
+        return response()->json([
+            'status' => true,
+            'data' => $addresses
+        ]);
+    }
     public function setCurrentAddress($id)
-{
-    $user = Auth::user();
+    {
+        $user = Auth::user();
 
-    // reset old
-    Address::where('user_id', $user->id)
-        ->update(['is_current' => 0]);
+        // reset old
+        Address::where('user_id', $user->id)
+            ->update(['is_current' => 0]);
 
-    // set new
-    Address::where('id', $id)
-        ->where('user_id', $user->id)
-        ->update(['is_current' => 1]);
+        // set new
+        Address::where('id', $id)
+            ->where('user_id', $user->id)
+            ->update(['is_current' => 1]);
 
-    return response()->json([
-        'status' => true,
-        'message' => 'Current address updated'
-    ]);
-}
+        return response()->json([
+            'status' => true,
+            'message' => 'Current address updated'
+        ]);
+    }
     public function updatePassword(Request $request)
     {
         try {
@@ -646,62 +647,60 @@ class UserController extends Controller
     }
 
 
- public function deleteAddress($id)
-{
-    try {
+    public function deleteAddress($id)
+    {
+        try {
 
-        if (!Auth::guard('sanctum')->check()) {
+            if (!Auth::guard('sanctum')->check()) {
+                return response()->json([
+                    'status'  => false,
+                    'message' => 'Unauthorized. Please login first.'
+                ], 401);
+            }
+
+            $user = Auth::user();
+
+
+            $address = Address::where('id', $id)
+                ->where('user_id', $user->id)
+                ->first();
+
+            if (!$address) {
+                return response()->json([
+                    'status'  => false,
+                    'message' => 'Address not found.'
+                ], 404);
+            }
+
+
+
+            $isCurrent = $address->is_current;
+
+
+            $address->delete();
+
+
+            if ($isCurrent) {
+                Address::where('user_id', $user->id)
+                    ->update(['is_current' => 0]);
+            }
+
+            return response()->json([
+                'status'  => true,
+                'message' => 'Address deleted successfully.'
+            ], 200);
+        } catch (QueryException $e) {
+
             return response()->json([
                 'status'  => false,
-                'message' => 'Unauthorized. Please login first.'
-            ], 401);
-        }
+                'message' => 'Database error occurred.'
+            ], 500);
+        } catch (Exception $e) {
 
-        $user = Auth::user();
-
-      
-        $address = Address::where('id', $id)
-            ->where('user_id', $user->id)
-            ->first();
-
-        if (!$address) {
             return response()->json([
                 'status'  => false,
-                'message' => 'Address not found.'
-            ], 404);
+                'message' => 'Something went wrong.'
+            ], 500);
         }
-
-      
-       
-        $isCurrent = $address->is_current;
-
-   
-        $address->delete();
-
-       
-        if ($isCurrent) {
-            Address::where('user_id', $user->id)
-                ->update(['is_current' => 0]);
-        }
-
-        return response()->json([
-            'status'  => true,
-            'message' => 'Address deleted successfully.'
-        ], 200);
-
-    } catch (QueryException $e) {
-
-        return response()->json([
-            'status'  => false,
-            'message' => 'Database error occurred.'
-        ], 500);
-
-    } catch (Exception $e) {
-
-        return response()->json([
-            'status'  => false,
-            'message' => 'Something went wrong.'
-        ], 500);
     }
-}
 }

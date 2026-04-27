@@ -3,6 +3,7 @@
 namespace App\Models;
 
 use Illuminate\Database\Eloquent\Model;
+use App\Models\OrderAddress;
 
 class Order extends Model
 {
@@ -11,10 +12,7 @@ class Order extends Model
         'settlement_id',
         'total_amount',
         'warehouse_id',
-        'status',
-        'address',
-        'city',
-        'state',
+        'order_address_id',
         'pincode',
         'payment_method',
         'payment_status',
@@ -39,7 +37,7 @@ class Order extends Model
     {
         return $this->hasOne(Payment::class);
     }
-      public function address()
+    public function address()
     {
         return $this->belongsTo(Address::class);
     }
@@ -49,21 +47,24 @@ class Order extends Model
         return $this->hasOne(Delivery::class);
     }
     public function warehouse()
-{
-    return $this->belongsTo(Warehouse::class);
-}
+    {
+        return $this->belongsTo(Warehouse::class);
+    }
 
-   public function warehouses()
-{
-    return $this->belongsToMany(
-        Warehouse::class,
-        'order_warehouses'
-    );
-}
+    public function warehouses()
+    {
+        return $this->belongsToMany(
+            Warehouse::class,
+            'order_warehouses'
+        );
+    }
 
- public function settlement()
+    public function settlement()
     {
         return $this->belongsTo(Settlement::class);
     }
-
+    public function orderAddress()
+    {
+        return $this->belongsTo(OrderAddress::class, 'order_address_id');
+    }
 }
