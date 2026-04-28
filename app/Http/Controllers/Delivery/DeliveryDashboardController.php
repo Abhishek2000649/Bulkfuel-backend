@@ -32,7 +32,8 @@ public function dashboard()
         $assigned = Delivery::with([
             'order.user',
             'order.warehouses',
-            'order.items.product'
+            'order.items.product',
+            'order.orderAddress'
         ])
         ->where('delivery_agent_id', Auth::id())
         ->where('order_status', 'OUT_FOR_DELIVERY')
@@ -101,6 +102,7 @@ public function dashboard()
             'order.user',
             'order.warehouses',
             'order.items.product',
+            'order.orderAddress'
         ])
         ->whereNull('delivery_agent_id')
         ->get();
@@ -468,7 +470,8 @@ public function delivered($id)
         $history = Delivery::with([
             'order.user',
             'order.warehouses',
-            'order.items.product'
+            'order.items.product',
+            'order.orderAddress'
         ])
         ->where('delivery_agent_id', Auth::id())
         ->whereIn('order_status', ['DELIVERED', 'CANCELLED'])

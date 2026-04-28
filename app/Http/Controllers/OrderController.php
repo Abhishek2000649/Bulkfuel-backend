@@ -5,7 +5,7 @@ namespace App\Http\Controllers;
 use App\Models\Address;
 use App\Models\Cart;
 use App\Models\Order;
-use App\Models\orderAddress;
+use App\Models\OrderAddress;
 use App\Models\OrderWarehouse;
 use App\Models\User;
 use App\Models\WarehouseProduct;
@@ -128,7 +128,6 @@ class OrderController extends Controller
 
             $userId = Auth::id();
 
-            // ✅ 2. Get Cart Items
             $cartItems = Cart::with('product')
                 ->where('user_id', $userId)
                 ->whereIn('id', $validated['cart_ids'])
@@ -141,7 +140,6 @@ class OrderController extends Controller
                 ], 400);
             }
 
-            // ✅ 3. Validate Products
             foreach ($cartItems as $item) {
                 if (!$item->product) {
                     return response()->json([
@@ -151,12 +149,10 @@ class OrderController extends Controller
                 }
             }
 
-            // ✅ 4. Calculate Total
             $totalAmount = $cartItems->sum(
                 fn($item) => $item->product->price * $item->quantity
             );
 
-            // ✅ 5. Warehouse Allocation
             $itemWarehouseMap = [];
 
             foreach ($cartItems as $item) {
@@ -182,7 +178,6 @@ class OrderController extends Controller
                 $itemWarehouseMap[$item->id] = $selectedWarehouse;
             }
 
-            // ✅ 6. Get Address (IMPORTANT)
             $address = Address::where('id', $validated['address_id'])
                 ->where('user_id', $userId)
                 ->first();
@@ -204,7 +199,7 @@ class OrderController extends Controller
             ) {
 
                
-                $orderAddress = orderAddress::create([
+                $orderAddress =     OrderAddress::create([
                     'user_address_id' => $address->id,
 
                     'phone_number'    => $address->phone_number,
@@ -230,7 +225,6 @@ class OrderController extends Controller
                     
                 ]);
 
-                // 🔥 7.2 Create Order
                 $order = Order::create([
                     'user_id'          => $userId,
                     'total_amount'     => $totalAmount,
@@ -241,7 +235,6 @@ class OrderController extends Controller
 
                 $usedWarehouses = [];
 
-                // 🔥 7.3 Create Order Items + Deduct Stock
                 foreach ($cartItems as $item) {
 
                     $warehouseId = $itemWarehouseMap[$item->id];
@@ -259,7 +252,6 @@ class OrderController extends Controller
                         ->decrement('stock_quantity', $item->quantity);
                 }
 
-                // 🔥 7.4 Save Order Warehouses
                 foreach (array_unique($usedWarehouses) as $wid) {
                     OrderWarehouse::create([
                         'order_id'     => $order->id,
@@ -267,11 +259,9 @@ class OrderController extends Controller
                     ]);
                 }
 
-                // 🔥 7.5 Clear Cart
                 Cart::whereIn('id', $validated['cart_ids'])->delete();
             });
 
-            // ✅ 8. Success Response
             return response()->json([
                 'status'  => true,
                 'message' => 'Order placed successfully'
@@ -287,7 +277,7 @@ class OrderController extends Controller
 
             return response()->json([
                 'status'  => false,
-                'message' => $e->getMessage() // 🔥 helpful for debug
+                'message' => $e->getMessage() 
             ], 500);
         }
     }

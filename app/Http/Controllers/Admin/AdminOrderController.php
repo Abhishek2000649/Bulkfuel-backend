@@ -17,7 +17,7 @@ class AdminOrderController extends Controller
 {
     try {
 
-        $orders = Order::with(['user.address', 'items.product','items.warehouse'])
+        $orders = Order::with(['orderAddress', 'items.product','items.warehouse'])
             ->whereIn('status', ['PENDING', 'CONFIRMED', 'PACKED'])
             ->latest()
             ->get();
@@ -129,7 +129,8 @@ public function updateStatus(Request $request, $id)
             'user:id,name,email',
             'items.product:id,name,price',
             'items.warehouse:id,name,city,state,pincode',
-            'delivery.agent:id,name'
+            'delivery.agent:id,name',
+            'orderAddress',
         ])
         ->latest()
         ->get();

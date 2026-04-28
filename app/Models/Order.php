@@ -13,6 +13,7 @@ class Order extends Model
         'total_amount',
         'warehouse_id',
         'order_address_id',
+        'status',
         'pincode',
         'payment_method',
         'payment_status',

@@ -101,7 +101,6 @@ class UserController extends Controller
     {
         try {
 
-            // 1️⃣ Authentication Check (Sanctum protected route)
             if (!Auth::check()) {
                 return response()->json([
                     'status'  => false,
@@ -118,7 +117,6 @@ class UserController extends Controller
 
             $totalAmount = 0;
 
-            // 3️⃣ Stock Checking
             foreach ($validated['items'] as $item) {
 
                 $product = Product::find($item['product_id']);
