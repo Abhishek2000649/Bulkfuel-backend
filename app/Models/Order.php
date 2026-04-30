@@ -12,6 +12,7 @@ class Order extends Model
         'settlement_id',
         'total_amount',
         'warehouse_id',
+        'razorpay_order_id',
         'order_address_id',
         'status',
         'pincode',
@@ -67,5 +68,9 @@ class Order extends Model
     public function orderAddress()
     {
         return $this->belongsTo(OrderAddress::class, 'order_address_id');
+    }
+    public function transactions()
+    {
+        return $this->hasMany(Transaction::class);
     }
 }

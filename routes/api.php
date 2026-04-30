@@ -11,6 +11,7 @@ use App\Http\Controllers\AdminController;
 use App\Http\Controllers\Admin\AdminOrderController;
 use App\Http\Controllers\Admin\AdminUserController;
 use App\Http\Controllers\Admin\CategoryController;
+use App\Http\Controllers\Admin\PaymentController;
 use App\Http\Controllers\Admin\StockController;
 use App\Http\Controllers\Admin\WarehouseController;
 use App\Http\Controllers\ChatController;
@@ -37,9 +38,9 @@ Route::middleware('auth:sanctum')->group(function () {
     Route::post('/profile/basic', [UserController::class, 'updateBasic']);
     Route::post('/profile/address', [UserController::class, 'updateAddress']);
     Route::post('/profile/password', [UserController::class, 'updatePassword']);
-     Route::get('/profile/addresses', [UserController::class, 'getAddresses']);
-      Route::post('/profile/address/set-current/{id}', [UserController::class, 'setCurrentAddress']);
-      Route::delete('/profile/address/{id}', [UserController::class, 'deleteAddress']);
+    Route::get('/profile/addresses', [UserController::class, 'getAddresses']);
+    Route::post('/profile/address/set-current/{id}', [UserController::class, 'setCurrentAddress']);
+    Route::delete('/profile/address/{id}', [UserController::class, 'deleteAddress']);
 });
 
 // Route::middleware(['auth:sanctum'])->get('user/', [UserController::class, 'home'])
@@ -80,13 +81,18 @@ Route::middleware(['auth:sanctum', 'role:USER'])
 
         Route::post('/checkout', [OrderController::class, 'checkout'])
             ->name('user.checkout');
+        Route::post('/cancel-order/{id}', [OrderController::class, 'cancelOrder']);
+        
 
         Route::post('/place-order', [OrderController::class, 'placeOrder'])
             ->name('user.place.order');
+        Route::post('/payments/create-order', [PaymentController::class, 'createOrder']);
+        Route::post('/payments/verify', [PaymentController::class, 'verify']);
         Route::post('/chat/send', [ChatController::class, 'sendMessage']);
         Route::get('/chat/messages/{conversationId?}', [ChatController::class, 'getMessages']);
         Route::post('/chat/seen', [ChatController::class, 'markSeen']);
     });
+    Route::post('/razorpay/webhook', [PaymentController::class, 'handleWebhook']);
 
 Route::middleware(['auth:sanctum', 'role:ADMIN'])
     ->prefix('admin')

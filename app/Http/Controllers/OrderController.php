@@ -128,6 +128,17 @@ class OrderController extends Controller
 
             $userId = Auth::id();
 
+            // $pendingOrder = Order::where('user_id', $userId)
+            //     ->where('status', 'PENDING')
+            //     ->exists();
+
+            // if ($pendingOrder) {
+            //     return response()->json([
+            //         'status' => false,
+            //         'message' => 'You already have a pending order'
+            //     ]);
+            // }
+
             $cartItems = Cart::with('product')
                 ->where('user_id', $userId)
                 ->whereIn('id', $validated['cart_ids'])
@@ -140,12 +151,17 @@ class OrderController extends Controller
                 ], 400);
             }
 
+
             foreach ($cartItems as $item) {
-                if (!$item->product) {
+                if (
+                    $item->product->payment_type === 'online' &&
+                    $validated['payment_method'] === 'cash'
+                ) {
+
                     return response()->json([
                         'status' => false,
-                        'message' => 'Product not found in cart'
-                    ], 404);
+                        'message' => 'This product requires online payment'
+                    ], 400);
                 }
             }
 
@@ -162,7 +178,10 @@ class OrderController extends Controller
                 $selectedWarehouse = null;
 
                 foreach ($stocks as $stock) {
-                    if ($stock->stock_quantity >= $item->quantity) {
+
+                    $availableStock = $stock->stock_quantity - $stock->reserved_quantity;
+
+                    if ($availableStock >= $item->quantity) {
                         $selectedWarehouse = $stock->warehouse_id;
                         break;
                     }
@@ -189,7 +208,7 @@ class OrderController extends Controller
                 ], 404);
             }
 
-            DB::transaction(function () use (
+            $order = DB::transaction(function () use (
                 $validated,
                 $cartItems,
                 $itemWarehouseMap,
@@ -198,38 +217,38 @@ class OrderController extends Controller
                 $address
             ) {
 
-               
-                $orderAddress =     OrderAddress::create([
+                $orderAddress = OrderAddress::create([
                     'user_address_id' => $address->id,
-
                     'phone_number'    => $address->phone_number,
                     'alternate_phone' => $address->alternate_phone,
-
-                    'address'        => $address->address,
-
-                    'house_no'       => $address->house_no,
-                    'building_name'  => $address->building_name,
-                    'street'         => $address->street,
-                    'area'           => $address->area,
-                    'landmark'       => $address->landmark,
-
-                    'city'           => $address->city,
-                    'state'          => $address->state,
-                    'pincode'        => $address->pincode,
-
-                    'latitude'       => $address->latitude,
-                    'longitude'      => $address->longitude,
-
+                    'address'         => $address->address,
+                    'house_no'        => $address->house_no,
+                    'building_name'   => $address->building_name,
+                    'street'          => $address->street,
+                    'area'            => $address->area,
+                    'landmark'        => $address->landmark,
+                    'city'            => $address->city,
+                    'state'           => $address->state,
+                    'pincode'         => $address->pincode,
+                    'latitude'        => $address->latitude,
+                    'longitude'       => $address->longitude,
                     'delivery_instructions' => $address->delivery_instructions,
-
-                    
                 ]);
+
+                $status = $validated['payment_method'] === 'online'
+                    ? 'PENDING'
+                    : 'CONFIRMED';
+
+                $paymentStatus = $validated['payment_method'] === 'online'
+                    ? 'PENDING'
+                    : 'PAID';
 
                 $order = Order::create([
                     'user_id'          => $userId,
                     'total_amount'     => $totalAmount,
-                    'status'           => 'CONFIRMED',
+                    'status'           => $status,
                     'payment_method'   => $validated['payment_method'],
+                    'payment_status'   => $paymentStatus,
                     'order_address_id' => $orderAddress->id,
                 ]);
 
@@ -247,9 +266,16 @@ class OrderController extends Controller
                         'price'        => $item->product->price,
                     ]);
 
-                    WarehouseProduct::where('warehouse_id', $warehouseId)
-                        ->where('product_id', $item->product_id)
-                        ->decrement('stock_quantity', $item->quantity);
+                    if ($validated['payment_method'] === 'cash') {
+                        WarehouseProduct::where('warehouse_id', $warehouseId)
+                            ->where('product_id', $item->product_id)
+                            ->decrement('stock_quantity', $item->quantity);
+                    }
+                    if ($validated['payment_method'] === 'online') {
+                        WarehouseProduct::where('warehouse_id', $warehouseId)
+                            ->where('product_id', $item->product_id)
+                            ->increment('reserved_quantity', $item->quantity);
+                    }
                 }
 
                 foreach (array_unique($usedWarehouses) as $wid) {
@@ -259,26 +285,66 @@ class OrderController extends Controller
                     ]);
                 }
 
-                Cart::whereIn('id', $validated['cart_ids'])->delete();
+                if ($validated['payment_method'] === 'cash') {
+                    Cart::whereIn('id', $validated['cart_ids'])->delete();
+                }
+
+                return $order;
             });
 
             return response()->json([
-                'status'  => true,
-                'message' => 'Order placed successfully'
-            ], 200);
+                'status' => true,
+                'message' => 'Order created successfully',
+                'data' => [
+                    'order_id' => $order->id,
+                    'amount' => $order->total_amount,
+                    'payment_method' => $order->payment_method
+                ]
+            ]);
         } catch (ValidationException $e) {
-
             return response()->json([
-                'status'  => false,
-                'message' => 'Validation failed',
-                'errors'  => $e->errors()
+                'status' => false,
+                'errors' => $e->errors()
             ], 422);
         } catch (Exception $e) {
-
             return response()->json([
-                'status'  => false,
-                'message' => $e->getMessage() 
+                'status' => false,
+                'message' => $e->getMessage()
             ], 500);
         }
     }
+
+    public function cancelOrder($id)
+{
+    $order = Order::where('id', $id)
+        ->where('user_id', Auth::id())
+        ->where('payment_status', 'PENDING')
+        ->first();
+
+    if (!$order) {
+        return response()->json([
+            'status' => false,
+            'message' => 'Order already processed or not found'
+        ]);
+    }
+
+    DB::transaction(function () use ($order) {
+
+        foreach ($order->items as $item) {
+            WarehouseProduct::where('warehouse_id', $item->warehouse_id)
+                ->where('product_id', $item->product_id)
+                ->decrement('reserved_quantity', $item->quantity);
+        }
+
+        $order->update([
+            'status' => 'CANCELLED',
+            'payment_status' => 'FAILED'
+        ]);
+    });
+
+    return response()->json([
+        'status' => true,
+        'message' => 'Order cancelled successfully'
+    ]);
+}
 }
